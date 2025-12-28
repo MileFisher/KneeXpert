@@ -36,7 +36,7 @@ models = {}
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-def load_model(model_name: str, model_path: str, num_classes: int = 2):
+def load_model(model_name: str, model_path: str, num_classes: int = 5):
     """Load a trained model."""
     if model_name == "resnet50":
         model = ResNetModel(num_classes=num_classes, pretrained=False)
@@ -142,7 +142,7 @@ async def predict(
             predicted_class = int(output.argmax(dim=1).item())
         
         # Prepare response
-        class_names = ["Normal", "Pathological"]
+        class_names = ["KL Grade 0", "KL Grade 1", "KL Grade 2", "KL Grade 3", "KL Grade 4"]
         result = {
             "predicted_class": class_names[predicted_class],
             "predicted_class_idx": int(predicted_class),

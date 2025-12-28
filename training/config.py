@@ -9,7 +9,7 @@ from typing import List, Optional
 @dataclass
 class DataConfig:
     """Data loading and preprocessing configuration."""
-    data_dir: str = "data/processed"
+    data_dir: str = "data/raw"
     raw_data_dir: str = "data/raw"
     image_size: int = 224
     batch_size: int = 32
@@ -17,12 +17,13 @@ class DataConfig:
     train_split: float = 0.7
     val_split: float = 0.15
     test_split: float = 0.15
-    num_classes: int = 2  # Normal vs Pathological (can be extended)
+    num_classes: int = 5  # KL grades 0-4
     class_names: List[str] = None
     
     def __post_init__(self):
         if self.class_names is None:
-            self.class_names = ["Normal", "Pathological"]
+            # Defaults; will be overridden by detected classes when loading data
+            self.class_names = ["0", "1", "2", "3", "4"]
 
 
 @dataclass
@@ -30,7 +31,7 @@ class ModelConfig:
     """Model architecture and training configuration."""
     model_name: str = "resnet50"  # Options: resnet50, efficientnet_b0, vit_base
     pretrained: bool = True
-    num_classes: int = 2
+    num_classes: int = 5
     dropout: float = 0.5
     learning_rate: float = 1e-4
     weight_decay: float = 1e-4

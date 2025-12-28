@@ -15,13 +15,20 @@ from training.config import model_config, data_config, training_config, augmenta
 from training.dataset import create_dataloaders
 from training.train import train_model
 from training.evaluate import evaluate_model
-from preprocessing.utils import create_data_splits
+from preprocessing.utils import create_data_splits, load_presplit_data
 
 
 def load_data_splits(data_dir: str):
     """Load data splits from directory or create them."""
-    splits_dir = Path(data_dir) / "splits"
-    
+    data_path = Path(data_dir)
+
+    # If pre-split directories exist, use them directly
+    if all((data_path / split).exists() for split in ["train", "val", "test"]):
+        print("Detected pre-split data (train/val/test). Loading directly...")
+        return load_presplit_data(data_dir)
+
+    # Otherwise, fall back to auto-splitting
+    splits_dir = data_path / "splits"
     if not splits_dir.exists() or not list(splits_dir.glob("*.txt")):
         print("Creating data splits...")
         splits = create_data_splits(
@@ -44,24 +51,24 @@ def load_data_splits(data_dir: str):
                         path, label = line.strip().split("\t")
                         paths_labels.append((path, label))
                 splits[split_name] = paths_labels
-    
+
     # Convert to lists
     train_data = splits.get("train", [])
     val_data = splits.get("val", [])
     test_data = splits.get("test", [])
-    
+
     # Create class mapping
     all_labels = set([label for _, label in train_data + val_data + test_data])
     class_to_idx = {cls: idx for idx, cls in enumerate(sorted(all_labels))}
     idx_to_class = {idx: cls for cls, idx in class_to_idx.items()}
-    
+
     train_paths = [path for path, _ in train_data]
     train_labels = [class_to_idx[label] for _, label in train_data]
     val_paths = [path for path, _ in val_data]
     val_labels = [class_to_idx[label] for _, label in val_data]
     test_paths = [path for path, _ in test_data] if test_data else None
     test_labels = [class_to_idx[label] for _, label in test_data] if test_data else None
-    
+
     return train_paths, train_labels, val_paths, val_labels, test_paths, test_labels, list(idx_to_class.values())
 
 

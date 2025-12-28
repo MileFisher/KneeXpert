@@ -9,6 +9,68 @@ import numpy as np
 from PIL import Image
 import cv2
 
+def load_presplit_data(data_dir: str) -> Tuple[List[str], List[int], List[str], List[int], List[str], List[int], List[str]]:
+    """
+    Load data that is already split into train/val/test directories.
+    Expects structure:
+        data_dir/train/<class_name>/*.png
+        data_dir/val/<class_name>/*.png
+        data_dir/test/<class_name>/*.png
+
+    Args:
+        data_dir: Root directory containing train/val/test subdirectories
+
+    Returns:
+        Tuple of (train_paths, train_labels, val_paths, val_labels, test_paths, test_labels, class_names)
+    """
+    data_path = Path(data_dir)
+    splits: Dict[str, List[Tuple[str, str]]] = {}
+
+    for split_name in ["train", "val", "test"]:
+        split_dir = data_path / split_name
+        if not split_dir.exists():
+            continue
+
+        split_data: List[Tuple[str, str]] = []
+        class_dirs = sorted([d for d in split_dir.iterdir() if d.is_dir()])
+
+        for class_dir in class_dirs:
+            class_name = class_dir.name
+            image_files = (
+                list(class_dir.glob("*.jpg")) +
+                list(class_dir.glob("*.png")) +
+                list(class_dir.glob("*.jpeg"))
+            )
+            for img_path in image_files:
+                split_data.append((str(img_path), class_name))
+
+        splits[split_name] = split_data
+
+    train_data = splits.get("train", [])
+    val_data = splits.get("val", [])
+    test_data = splits.get("test", [])
+
+    # Determine class names from data
+    all_labels = set()
+    for split_data in [train_data, val_data, test_data]:
+        all_labels.update([label for _, label in split_data])
+    # Sort numerically if possible (handles class names like "0", "1", ...)
+    try:
+        class_names = sorted(all_labels, key=lambda x: int(x))
+    except ValueError:
+        class_names = sorted(all_labels)
+
+    class_to_idx = {cls: idx for idx, cls in enumerate(class_names)}
+
+    train_paths = [path for path, _ in train_data]
+    train_labels = [class_to_idx[label] for _, label in train_data]
+    val_paths = [path for path, _ in val_data]
+    val_labels = [class_to_idx[label] for _, label in val_data]
+    test_paths = [path for path, _ in test_data] if test_data else None
+    test_labels = [class_to_idx[label] for _, label in test_data] if test_data else None
+
+    return train_paths, train_labels, val_paths, val_labels, test_paths, test_labels, class_names
+
 
 def load_image(image_path: str, target_size: Tuple[int, int] = None) -> np.ndarray:
     """

@@ -48,12 +48,15 @@ data/splits/*
 !data/splits/.gitkeep
 
 # Models
+# Exclude all pretrained models except LFS-tracked .pth files
 models/pretrained/*
 !models/pretrained/.gitkeep
-*.pth
+!models/pretrained/**/*.pth
+# Exclude other model formats
 *.pt
 *.h5
 *.ckpt
+# Note: *.pth files are tracked by Git LFS (see .gitattributes)
 
 # Logs
 logs/

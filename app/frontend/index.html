@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KneeXpert - AI Knee Joint Analysis</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            overflow: hidden;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+        
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+        
+        .header p {
+            font-size: 1.1em;
+            opacity: 0.9;
+        }
+        
+        .content {
+            padding: 40px;
+        }
+        
+        .upload-section {
+            border: 3px dashed #667eea;
+            border-radius: 15px;
+            padding: 40px;
+            text-align: center;
+            margin-bottom: 30px;
+            transition: all 0.3s;
+        }
+        
+        .upload-section:hover {
+            border-color: #764ba2;
+            background: #f8f9ff;
+        }
+        
+        .upload-section.dragover {
+            border-color: #764ba2;
+            background: #f0f2ff;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .upload-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.1em;
+            border-radius: 50px;
+            cursor: pointer;
+            transition: transform 0.2s;
+            margin: 10px;
+        }
+        
+        .upload-btn:hover {
+            transform: scale(1.05);
+        }
+        
+        .upload-btn:active {
+            transform: scale(0.95);
+        }
+        
+        .preview-section {
+            display: none;
+            margin: 30px 0;
+        }
+        
+        .preview-section.active {
+            display: block;
+        }
+        
+        .image-preview {
+            max-width: 100%;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            margin: 20px 0;
+        }
+        
+        .results-section {
+            display: none;
+            margin-top: 30px;
+            padding: 30px;
+            background: #f8f9ff;
+            border-radius: 15px;
+        }
+        
+        .results-section.active {
+            display: block;
+        }
+        
+        .result-card {
+            background: white;
+            padding: 25px;
+            border-radius: 10px;
+            margin: 15px 0;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.1);
+        }
+        
+        .result-card h3 {
+            color: #667eea;
+            margin-bottom: 15px;
+        }
+        
+        .probability-bar {
+            background: #e0e0e0;
+            border-radius: 10px;
+            height: 30px;
+            margin: 10px 0;
+            overflow: hidden;
+            position: relative;
+        }
+        
+        .probability-fill {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            transition: width 0.5s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            padding: 20px;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 50px;
+            height: 50px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .error {
+            background: #ffebee;
+            color: #c62828;
+            padding: 15px;
+            border-radius: 10px;
+            margin: 20px 0;
+            display: none;
+        }
+        
+        .error.active {
+            display: block;
+        }
+        
+        .model-selector {
+            margin: 20px 0;
+            padding: 15px;
+            background: #f8f9ff;
+            border-radius: 10px;
+        }
+        
+        .model-selector label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .model-selector select {
+            width: 100%;
+            padding: 10px;
+            border: 2px solid #667eea;
+            border-radius: 5px;
+            font-size: 1em;
+        }
+        
+        .gradcam-toggle {
+            margin: 15px 0;
+        }
+        
+        .gradcam-toggle input {
+            margin-right: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🦴 KneeXpert</h1>
+            <p>Artificial Intelligence System for Knee Joint Analysis and Diagnosis</p>
+        </div>
+        
+        <div class="content">
+            <div class="model-selector">
+                <label for="modelSelect">Select Model:</label>
+                <select id="modelSelect">
+                    <option value="resnet50">ResNet-50</option>
+                    <option value="efficientnet_b0">EfficientNet-B0</option>
+                    <option value="vit_base">Vision Transformer (ViT)</option>
+                </select>
+            </div>
+            
+            <div class="gradcam-toggle">
+                <label>
+                    <input type="checkbox" id="gradcamToggle" checked>
+                    Include Grad-CAM Visualization
+                </label>
+            </div>
+            
+            <div class="upload-section" id="uploadSection">
+                <h2>Upload Knee Image</h2>
+                <p>Drag and drop an image here or click to browse</p>
+                <input type="file" id="fileInput" class="file-input" accept="image/*">
+                <button class="upload-btn" onclick="document.getElementById('fileInput').click()">
+                    Choose Image
+                </button>
+            </div>
+            
+            <div class="error" id="errorMessage"></div>
+            
+            <div class="preview-section" id="previewSection">
+                <h3>Image Preview</h3>
+                <img id="imagePreview" class="image-preview" alt="Preview">
+                <button class="upload-btn" onclick="analyzeImage()">Analyze Image</button>
+            </div>
+            
+            <div class="loading" id="loading">
+                <div class="spinner"></div>
+                <p>Analyzing image...</p>
+            </div>
+            
+            <div class="results-section" id="resultsSection">
+                <h2>Analysis Results</h2>
+                <div class="result-card">
+                    <h3>Prediction</h3>
+                    <p><strong>Class:</strong> <span id="predictedClass"></span></p>
+                    <p><strong>Confidence:</strong> <span id="confidence"></span></p>
+                </div>
+                
+                <div class="result-card">
+                    <h3>Probabilities</h3>
+                    <div id="probabilities"></div>
+                </div>
+                
+                <div class="result-card" id="gradcamCard" style="display: none;">
+                    <h3>Grad-CAM Visualization</h3>
+                    <img id="gradcamImage" class="image-preview" alt="Grad-CAM">
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const API_URL = 'http://localhost:8000';
+        let currentFile = null;
+        
+        // File input handler
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (file) {
+                handleFile(file);
+            }
+        });
+        
+        // Drag and drop
+        const uploadSection = document.getElementById('uploadSection');
+        uploadSection.addEventListener('dragover', function(e) {
+            e.preventDefault();
+            uploadSection.classList.add('dragover');
+        });
+        
+        uploadSection.addEventListener('dragleave', function() {
+            uploadSection.classList.remove('dragover');
+        });
+        
+        uploadSection.addEventListener('drop', function(e) {
+            e.preventDefault();
+            uploadSection.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                handleFile(file);
+            }
+        });
+        
+        function handleFile(file) {
+            currentFile = file;
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('imagePreview').src = e.target.result;
+                document.getElementById('previewSection').classList.add('active');
+                document.getElementById('resultsSection').classList.remove('active');
+                document.getElementById('errorMessage').classList.remove('active');
+            };
+            reader.readAsDataURL(file);
+        }
+        
+        async function analyzeImage() {
+            if (!currentFile) {
+                showError('Please select an image first');
+                return;
+            }
+            
+            const loading = document.getElementById('loading');
+            const resultsSection = document.getElementById('resultsSection');
+            const errorMessage = document.getElementById('errorMessage');
+            
+            loading.classList.add('active');
+            resultsSection.classList.remove('active');
+            errorMessage.classList.remove('active');
+            
+            const formData = new FormData();
+            formData.append('file', currentFile);
+            
+            const modelName = document.getElementById('modelSelect').value;
+            const includeGradcam = document.getElementById('gradcamToggle').checked;
+            
+            try {
+                const response = await fetch(
+                    `${API_URL}/predict?model_name=${modelName}&include_gradcam=${includeGradcam}`,
+                    {
+                        method: 'POST',
+                        body: formData
+                    }
+                );
+                
+                if (!response.ok) {
+                    throw new Error(`Server error: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                // Display results
+                document.getElementById('predictedClass').textContent = result.predicted_class;
+                document.getElementById('confidence').textContent = 
+                    `${(result.confidence * 100).toFixed(2)}%`;
+                
+                // Display probabilities
+                const probabilitiesDiv = document.getElementById('probabilities');
+                probabilitiesDiv.innerHTML = '';
+                for (const [className, prob] of Object.entries(result.probabilities)) {
+                    const probPercent = (prob * 100).toFixed(2);
+                    const probBar = document.createElement('div');
+                    probBar.innerHTML = `
+                        <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                            <span><strong>${className}</strong></span>
+                            <span>${probPercent}%</span>
+                        </div>
+                        <div class="probability-bar">
+                            <div class="probability-fill" style="width: ${probPercent}%">
+                                ${probPercent}%
+                            </div>
+                        </div>
+                    `;
+                    probabilitiesDiv.appendChild(probBar);
+                }
+                
+                // Display Grad-CAM if available
+                if (result.gradcam) {
+                    document.getElementById('gradcamImage').src = result.gradcam;
+                    document.getElementById('gradcamCard').style.display = 'block';
+                } else {
+                    document.getElementById('gradcamCard').style.display = 'none';
+                }
+                
+                resultsSection.classList.add('active');
+                
+            } catch (error) {
+                showError(`Error: ${error.message}`);
+            } finally {
+                loading.classList.remove('active');
+            }
+        }
+        
+        function showError(message) {
+            const errorMessage = document.getElementById('errorMessage');
+            errorMessage.textContent = message;
+            errorMessage.classList.add('active');
+        }
+    </script>
+</body>
+</html>
+

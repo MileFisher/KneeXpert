@@ -1,0 +1,21 @@
+{
+  "categories": [
+    { "id": 1, "name": "Meniscal Tear (Myxoid)" },
+    { "id": 2, "name": "Meniscal Tear (Horizontal)" },
+    { "id": 3, "name": "Meniscal Tear (Radial)" },
+    { "id": 4, "name": "Meniscal Tear (Vertical/Longitudinal)" },
+    { "id": 5, "name": "Meniscal Tear (Oblique)" },
+    { "id": 6, "name": "Meniscal Tear (Complex)" },
+    { "id": 7, "name": "Meniscal Tear (Flap)" },
+    { "id": 8, "name": "Meniscal Tear (Extrusion)" },
+    { "id": 9, "name": "Ligament Tear (Low-Grade Sprain)" },
+    { "id": 10, "name": "Ligament Tear (Moderate Grade Sprain or Mucoid Degeneration)" },
+    { "id": 11, "name": "Ligament Tear (Full Thickness/Complete Tear)" },
+    { "id": 12, "name": "Cartilage Lesion (1)" },
+    { "id": 13, "name": "Cartilage Lesion (2A)" },
+    { "id": 14, "name": "Cartilage Lesion (2B)" },
+    { "id": 15, "name": "Cartilage Lesion (3)" },
+    { "id": 16, "name": "Effusion" }
+  ],
+  "default_threshold": 0.5
+}

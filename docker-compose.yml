@@ -1,0 +1,24 @@
+services:
+  backend:
+    build: ./backend
+    container_name: kneexpert-backend
+    ports:
+      - "9000:9000"
+    volumes:
+      # Model weights & data stay on local disk, mounted in (not baked into image)
+      - ./backend/xray/models:/app/xray/models
+      - ./backend/mri/models:/app/mri/models
+      - ./backend/data:/app/data
+    restart: unless-stopped
+
+  frontend:
+    build: ./frontend
+    container_name: kneexpert-frontend
+    ports:
+      - "8080:8080"
+    environment:
+      # Browser-side calls hit the host-mapped backend port
+      - VITE_BACKBONE_URL=http://localhost:9000
+    depends_on:
+      - backend
+    restart: unless-stopped

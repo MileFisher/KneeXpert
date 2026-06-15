@@ -1,0 +1,245 @@
+SKM-TEA Test Set — Ground Truth Summary
+============================================================
+Scans found  : 36
+Scans missing: 0
+
+Categories:
+  [ 1] Meniscal Tear (Myxoid)
+  [ 2] Meniscal Tear (Horizontal)
+  [ 3] Meniscal Tear (Radial)
+  [ 4] Meniscal Tear (Vertical/Longitudinal)
+  [ 5] Meniscal Tear (Oblique)
+  [ 6] Meniscal Tear (Complex)
+  [ 7] Meniscal Tear (Flap)
+  [ 8] Meniscal Tear (Extrusion)
+  [ 9] Ligament Tear (Low-Grade Sprain)
+  [10] Ligament Tear (Moderate Grade Sprain or Mucoid Degeneration)
+  [11] Ligament Tear (Full Thickness/Complete Tear)
+  [12] Cartilage Lesion (1)
+  [13] Cartilage Lesion (2A)
+  [14] Cartilage Lesion (2B)
+  [15] Cartilage Lesion (3)
+  [16] Effusion
+
+============================================================
+
+MTR_005  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_005_cleaned.nii.gz
+  [ 5] Meniscal Tear (Oblique)
+  [13] Cartilage Lesion (2A)
+
+MTR_006  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_006_cleaned.nii.gz
+  [ 6] Meniscal Tear (Complex)
+  [12] Cartilage Lesion (1)
+  [13] Cartilage Lesion (2A)
+  [16] Effusion
+
+MTR_030  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_030_cleaned.nii.gz
+  [ 2] Meniscal Tear (Horizontal)
+  [ 6] Meniscal Tear (Complex)
+  [ 8] Meniscal Tear (Extrusion)
+  [11] Ligament Tear (Full Thickness/Complete Tear)
+  [12] Cartilage Lesion (1)
+  [13] Cartilage Lesion (2A)
+  [14] Cartilage Lesion (2B)
+
+MTR_034  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_034_cleaned.nii.gz
+  [12] Cartilage Lesion (1)
+  [16] Effusion
+
+MTR_048  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_048_cleaned.nii.gz
+  [16] Effusion
+
+MTR_052  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_052_cleaned.nii.gz
+  [ 2] Meniscal Tear (Horizontal)
+  [ 6] Meniscal Tear (Complex)
+  [15] Cartilage Lesion (3)
+  [16] Effusion
+
+MTR_065  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_065_cleaned.nii.gz
+  [ 2] Meniscal Tear (Horizontal)
+  [ 5] Meniscal Tear (Oblique)
+  [ 6] Meniscal Tear (Complex)
+  [12] Cartilage Lesion (1)
+  [16] Effusion
+
+MTR_066  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_066_cleaned.nii.gz
+  [ 4] Meniscal Tear (Vertical/Longitudinal)
+  [ 5] Meniscal Tear (Oblique)
+  [12] Cartilage Lesion (1)
+  [13] Cartilage Lesion (2A)
+  [16] Effusion
+
+MTR_079  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_079_cleaned.nii.gz
+  [ 4] Meniscal Tear (Vertical/Longitudinal)
+  [11] Ligament Tear (Full Thickness/Complete Tear)
+  [13] Cartilage Lesion (2A)
+  [16] Effusion
+
+MTR_080  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_080_cleaned.nii.gz
+  [12] Cartilage Lesion (1)
+  [16] Effusion
+
+MTR_096  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_096_cleaned.nii.gz
+  [13] Cartilage Lesion (2A)
+
+MTR_099  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_099_cleaned.nii.gz
+  [11] Ligament Tear (Full Thickness/Complete Tear)
+  [16] Effusion
+
+MTR_120  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_120_cleaned.nii.gz
+  [16] Effusion
+
+MTR_126  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_126_cleaned.nii.gz
+  [11] Ligament Tear (Full Thickness/Complete Tear)
+  [12] Cartilage Lesion (1)
+  [13] Cartilage Lesion (2A)
+  [16] Effusion
+
+MTR_144  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_144_cleaned.nii.gz
+  [ 9] Ligament Tear (Low-Grade Sprain)
+  [12] Cartilage Lesion (1)
+
+MTR_156  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_156_cleaned.nii.gz
+  [ 6] Meniscal Tear (Complex)
+  [12] Cartilage Lesion (1)
+  [13] Cartilage Lesion (2A)
+  [14] Cartilage Lesion (2B)
+  [16] Effusion
+
+MTR_158  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_158_cleaned.nii.gz
+  [ 8] Meniscal Tear (Extrusion)
+  [10] Ligament Tear (Moderate Grade Sprain or Mucoid Degeneration)
+  [12] Cartilage Lesion (1)
+  [13] Cartilage Lesion (2A)
+  [16] Effusion
+
+MTR_173  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_173_cleaned.nii.gz
+  [16] Effusion
+
+MTR_176  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_176_cleaned.nii.gz
+  [ 3] Meniscal Tear (Radial)
+  [ 9] Ligament Tear (Low-Grade Sprain)
+  [16] Effusion
+
+MTR_178  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_178_cleaned.nii.gz
+  [ 9] Ligament Tear (Low-Grade Sprain)
+  [11] Ligament Tear (Full Thickness/Complete Tear)
+  [16] Effusion
+
+MTR_188  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_188_cleaned.nii.gz
+  [ 8] Meniscal Tear (Extrusion)
+  [13] Cartilage Lesion (2A)
+  [16] Effusion
+
+MTR_196  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_196_cleaned.nii.gz
+  [ 5] Meniscal Tear (Oblique)
+  [10] Ligament Tear (Moderate Grade Sprain or Mucoid Degeneration)
+  [13] Cartilage Lesion (2A)
+  [16] Effusion
+
+MTR_198  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_198_cleaned.nii.gz
+  [ 5] Meniscal Tear (Oblique)
+
+MTR_199  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_199_cleaned.nii.gz
+  [16] Effusion
+
+MTR_218  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_218_cleaned.nii.gz
+  [ 6] Meniscal Tear (Complex)
+  [15] Cartilage Lesion (3)
+  [16] Effusion
+
+MTR_219  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_219_cleaned.nii.gz
+  [ 4] Meniscal Tear (Vertical/Longitudinal)
+  [11] Ligament Tear (Full Thickness/Complete Tear)
+  [16] Effusion
+
+MTR_221  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_221_cleaned.nii.gz
+  [ 6] Meniscal Tear (Complex)
+  [ 8] Meniscal Tear (Extrusion)
+  [15] Cartilage Lesion (3)
+  [16] Effusion
+
+MTR_223  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_223_cleaned.nii.gz
+  (no labels)
+
+MTR_224  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_224_cleaned.nii.gz
+  [ 3] Meniscal Tear (Radial)
+  [ 8] Meniscal Tear (Extrusion)
+  [12] Cartilage Lesion (1)
+  [13] Cartilage Lesion (2A)
+
+MTR_227  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_227_cleaned.nii.gz
+  [ 5] Meniscal Tear (Oblique)
+  [13] Cartilage Lesion (2A)
+  [16] Effusion
+
+MTR_235  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_235_cleaned.nii.gz
+  [13] Cartilage Lesion (2A)
+  [16] Effusion
+
+MTR_237  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_237_cleaned.nii.gz
+  [11] Ligament Tear (Full Thickness/Complete Tear)
+  [13] Cartilage Lesion (2A)
+  [15] Cartilage Lesion (3)
+  [16] Effusion
+
+MTR_240  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_240_cleaned.nii.gz
+  [ 5] Meniscal Tear (Oblique)
+  [13] Cartilage Lesion (2A)
+  [14] Cartilage Lesion (2B)
+  [16] Effusion
+
+MTR_241  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_241_cleaned.nii.gz
+  [ 8] Meniscal Tear (Extrusion)
+  [13] Cartilage Lesion (2A)
+  [14] Cartilage Lesion (2B)
+  [15] Cartilage Lesion (3)
+  [16] Effusion
+
+MTR_244  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_244_cleaned.nii.gz
+  [ 5] Meniscal Tear (Oblique)
+  [11] Ligament Tear (Full Thickness/Complete Tear)
+  [16] Effusion
+
+MTR_248  (source: cleaned)
+  file: /content/drive/MyDrive/SKM-TEA/mri_cleaned/MTR_248_cleaned.nii.gz
+  [ 3] Meniscal Tear (Radial)
+  [11] Ligament Tear (Full Thickness/Complete Tear)
+  [13] Cartilage Lesion (2A)
+  [16] Effusion
+

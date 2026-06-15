@@ -1,0 +1,64 @@
+# Python
+venv/
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS / IDE
+.DS_Store
+.idea/
+.vscode/
+
+# Model checkpoints (directories kept via .gitkeep)
+**/models/*
+!**/models/
+!**/models/.gitkeep
+*.pth
+*.pt
+*.pth.tar
+*.ckpt
+*.h5
+*.keras
+*.onnx
+*.safetensors
+*.pb
+*.tflite
+*.mlmodel
+
+# Medical imaging & large volumes
+*.nii
+*.nii.gz
+*.nrrd
+*.nhdr
+*.mha
+*.mhd
+*.img
+*.hdr
+*.mnc
+*.par
+*.rec
+*.dcm
+*.dicom
+
+# Local sample volumes (metadata in data/ may still be tracked)
+data/samples/*
+!data/samples/
+!data/samples/.gitkeep
+
+# Notebook outputs
+.ipynb_checkpoints/
+notebooks/.ipynb_checkpoints/
+
+# Ad-hoc exports / caches
+*.pkl
+*.pickle
+*.npz
+*.npy
+*.hdf5
+*.h5
+*.cache

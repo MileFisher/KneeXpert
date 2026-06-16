@@ -25,6 +25,12 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 
+# === Environment files (local config / secrets — never committed) ===
+# Applies to both backend/ and frontend/. The .env.example templates ARE tracked.
+.env
+.env.*
+!.env.example
+
 # === Model checkpoints (kept local, never committed) ===
 **/models/*
 !**/models/

@@ -58,9 +58,11 @@ uvicorn app:app --host 0.0.0.0 --port 9000 --reload
 
 ```bash
 cd frontend
-npm install                      # or: bun install
-npm run dev                      # serves on http://localhost:8080
+npm install --legacy-peer-deps    # or: bun install
+npm run dev                       # serves on http://localhost:8080
 ```
+
+> `--legacy-peer-deps` is needed because `@vitejs/plugin-react-swc` declares a peer range of vite ≤7 while the project uses vite 8. `bun install` does not need the flag.
 
 The frontend's `.env` sets `VITE_BACKBONE_URL=http://localhost:9000`. Adjust if the backend runs elsewhere.
 

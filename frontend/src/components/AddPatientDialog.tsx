@@ -1,10 +1,12 @@
 import { useState } from "react";
 import { X, Upload, Plus, User, Activity, FileText, Stethoscope } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import type { NewPatientInput } from "@/context/PatientContext";
 
 interface AddPatientDialogProps {
   open: boolean;
   onClose: () => void;
+  onAddPatient: (input: NewPatientInput) => string;
 }
 
 const steps = [
@@ -14,8 +16,9 @@ const steps = [
   { id: 4, label: "Imaging Upload", icon: Upload },
 ];
 
-export function AddPatientDialog({ open, onClose }: AddPatientDialogProps) {
+export function AddPatientDialog({ open, onClose, onAddPatient }: AddPatientDialogProps) {
   const [step, setStep] = useState(1);
+  const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
     firstName: "", lastName: "", age: "", gender: "Male",
     height: "", weight: "",
@@ -31,7 +34,84 @@ export function AddPatientDialog({ open, onClose }: AddPatientDialogProps) {
 
   if (!open) return null;
 
-  const updateForm = (field: string, value: any) => setForm(prev => ({ ...prev, [field]: value }));
+  const updateForm = (field: string, value: any) => {
+    setError(null);
+    setForm(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleCreate = () => {
+    // Validate required fields
+    if (!form.firstName.trim() || !form.lastName.trim()) {
+      setError("First and last name are required.");
+      setStep(1);
+      return;
+    }
+    if (!form.age || Number(form.age) < 1 || Number(form.age) > 120) {
+      setError("Please enter a valid age.");
+      setStep(1);
+      return;
+    }
+    if (!form.chiefComplaint.trim()) {
+      setError("Chief complaint is required.");
+      setStep(3);
+      return;
+    }
+
+    const heightM = Number(form.height) / 100;
+    const bmi = heightM > 0 && Number(form.weight) > 0
+      ? Math.round((Number(form.weight) / (heightM * heightM)) * 10) / 10
+      : 25.0;
+
+    // Build history and symptoms from form
+    const historyParts: string[] = [];
+    if (form.medicalHistory.trim()) historyParts.push(form.medicalHistory.trim());
+    if (form.surgicalHistory.trim()) historyParts.push(`Surgical: ${form.surgicalHistory.trim()}`);
+    if (form.familyHistory.trim()) historyParts.push(`Family Hx: ${form.familyHistory.trim()}`);
+    if (form.medications.trim()) historyParts.push(`Medications: ${form.medications.trim()}`);
+    if (form.allergies.trim()) historyParts.push(`Allergies: ${form.allergies.trim()}`);
+
+    const symptomParts: string[] = [];
+    if (form.chiefComplaint.trim()) symptomParts.push(form.chiefComplaint.trim());
+    if (form.symptomDuration.trim()) symptomParts.push(`Duration: ${form.symptomDuration.trim()}`);
+    const examFindings: string[] = [];
+    if (form.morningStiffness) examFindings.push("Morning stiffness >30min");
+    if (form.crepitus) examFindings.push("Crepitus on flexion");
+    if (form.swelling) examFindings.push("Joint swelling");
+    if (form.reducedROM) examFindings.push("Reduced ROM");
+    if (examFindings.length) symptomParts.push(`Exam: ${examFindings.join(", ")}`);
+
+    const kneeLabel = form.affectedKnee === "bilateral" ? "Bilateral Knee" :
+      form.affectedKnee === "left" ? "Left Knee" : "Right Knee";
+
+    const viewMap: Record<string, string> = { xray: "AP", mri: "Sagittal", ct: "Axial" };
+
+    onAddPatient({
+      name: `${form.firstName.trim()} ${form.lastName.trim()}`,
+      age: Number(form.age),
+      gender: form.gender as "Male" | "Female",
+      bmi,
+      history: historyParts.join(". ") || "No history recorded.",
+      symptoms: symptomParts.join(". ") || "No symptoms recorded.",
+      painLevel: form.painLevel,
+      modality: form.imagingType as "xray" | "mri",
+      region: kneeLabel,
+      view: viewMap[form.imagingType] ?? "AP",
+    });
+
+    // Reset and close
+    setForm({
+      firstName: "", lastName: "", age: "", gender: "Male",
+      height: "", weight: "", phone: "", email: "",
+      medicalHistory: "", surgicalHistory: "", familyHistory: "",
+      medications: "", allergies: "",
+      chiefComplaint: "", symptomDuration: "", painLevel: 5,
+      morningStiffness: false, crepitus: false, swelling: false, reducedROM: false,
+      affectedKnee: "right", imagingType: "xray", notes: "",
+    });
+    setStep(1);
+    setError(null);
+    onClose();
+  };
 
   return (
     <AnimatePresence>
@@ -297,6 +377,9 @@ export function AddPatientDialog({ open, onClose }: AddPatientDialogProps) {
               Previous
             </button>
             <div className="flex items-center gap-1.5">
+              {error && (
+                <span className="text-[10px] text-destructive font-medium">{error}</span>
+              )}
               {steps.map(s => (
                 <div key={s.id} className={`w-2 h-2 rounded-full transition-colors ${step >= s.id ? "bg-primary" : "bg-muted-foreground/30"}`} />
               ))}
@@ -310,7 +393,7 @@ export function AddPatientDialog({ open, onClose }: AddPatientDialogProps) {
               </button>
             ) : (
               <button
-                onClick={onClose}
+                onClick={handleCreate}
                 className="px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-medium hover:bg-primary/90 transition-colors inline-flex items-center gap-1.5"
               >
                 <Plus className="w-4 h-4" />

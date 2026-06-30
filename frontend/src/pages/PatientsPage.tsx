@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { motion } from "framer-motion";
 import { Search, Plus, SlidersHorizontal, ChevronDown, X } from "lucide-react";
+import { toast } from "sonner";
 import { Patient } from "@/data/patients";
-import { usePatients } from "@/context/PatientContext";
+import { usePatients, type NewPatientInput } from "@/context/PatientContext";
 import { StatusBadge } from "@/components/StatusBadge";
 import { GradeBadge } from "@/components/GradeBadge";
 import { ConfidenceGauge } from "@/components/ConfidenceGauge";
@@ -39,7 +40,12 @@ const PAIN_RANGES = [
 ];
 
 export default function PatientsPage() {
-  const { patients } = usePatients();
+  const { patients, addPatient } = usePatients();
+  const handleAddPatient = useCallback((input: NewPatientInput) => {
+    const id = addPatient(input);
+    toast.success("Patient created", { description: `${input.name} (${id}) added to the system.` });
+    return id;
+  }, [addPatient]);
   const [search, setSearch] = useState("");
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
   const [gradeFilter, setGradeFilter] = useState<number | null>(null);
@@ -285,7 +291,7 @@ export default function PatientsPage() {
       </div>
 
       {selectedPatient && <PatientDetailPanel patient={selectedPatient} onClose={() => setSelectedPatient(null)} />}
-      <AddPatientDialog open={showAddPatient} onClose={() => setShowAddPatient(false)} />
+      <AddPatientDialog open={showAddPatient} onClose={() => setShowAddPatient(false)} onAddPatient={handleAddPatient} />
     </div>
   );
 }

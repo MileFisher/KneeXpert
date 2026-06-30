@@ -62,9 +62,23 @@ function hydratePatient(raw: Omit<Patient, "report"> & { report?: PatientReport 
   };
 }
 
+export type NewPatientInput = {
+  name: string;
+  age: number;
+  gender: "Male" | "Female";
+  bmi: number;
+  history: string;
+  symptoms: string;
+  painLevel: number;
+  modality: Modality;
+  region: string;
+  view?: string;
+};
+
 interface PatientContextValue {
   patients: Patient[];
   getPatient: (id: string) => Patient | undefined;
+  addPatient: (input: NewPatientInput) => string;
   applyAnalysisResult: (patientId: string, payload: ApplyAnalysisPayload) => void;
   confirmDiagnosis: (patientId: string, payload: ConfirmDiagnosisPayload) => void;
 }
@@ -85,6 +99,50 @@ export function PatientProvider({ children }: { children: ReactNode }) {
     (id: string) => patients.find(p => p.id === id),
     [patients],
   );
+
+  const addPatient = useCallback((input: NewPatientInput): string => {
+    const today = new Date().toISOString().slice(0, 10);
+    const id = `PT-${Date.now().toString(36).toUpperCase()}`;
+    const scanId = `SCN-${id}-01`;
+    const newPatient: Patient = {
+      id,
+      name: input.name,
+      age: input.age,
+      gender: input.gender,
+      bmi: input.bmi,
+      history: input.history,
+      symptoms: input.symptoms,
+      painLevel: input.painLevel,
+      grade: null,
+      aiConfidence: null,
+      lastVisit: today,
+      status: "pending",
+      modality: input.modality,
+      scans: [
+        {
+          id: scanId,
+          modality: input.modality,
+          date: today,
+          view: input.view,
+          region: input.region,
+          grade: null,
+          aiConfidence: null,
+          modelUsed: "Pending",
+          preprocessing: [],
+        },
+      ],
+      timeline: [
+        {
+          date: today,
+          type: "scan",
+          summary: `${input.region} ${input.modality.toUpperCase()} uploaded. Awaiting analysis.`,
+        },
+      ],
+      report: null,
+    };
+    setPatients(prev => [newPatient, ...prev]);
+    return id;
+  }, []);
 
   const applyAnalysisResult = useCallback((patientId: string, payload: ApplyAnalysisPayload) => {
     const today = new Date().toISOString().slice(0, 10);
@@ -181,8 +239,8 @@ export function PatientProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = useMemo(
-    () => ({ patients, getPatient, applyAnalysisResult, confirmDiagnosis }),
-    [patients, getPatient, applyAnalysisResult, confirmDiagnosis],
+    () => ({ patients, getPatient, addPatient, applyAnalysisResult, confirmDiagnosis }),
+    [patients, getPatient, addPatient, applyAnalysisResult, confirmDiagnosis],
   );
 
   return <PatientContext.Provider value={value}>{children}</PatientContext.Provider>;

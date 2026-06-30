@@ -91,6 +91,10 @@ CLAUDE.local.md
 .claude/
 .mcp.json
 
+# === Session reports (local documentation, not for repo) ===
+SESSION_REPORT*.md
+session_report*.md
+
 # === OS / IDE ===
 .DS_Store
 .idea/

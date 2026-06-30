@@ -43,6 +43,12 @@ import type { CohortInputEntry, ModalityUpload } from "@/lib/cohortTypes";
 import { gradcamToDataUrl, pngBase64ToDataUrl } from "@/lib/diagnosticApi";
 import {
   getFindingsForGrade,
+  getFeedbackFindings,
+  getFeedbackRecommendations,
+  getFeedbackLimitations,
+  getFeedbackEvidence,
+  getFeedbackSources,
+  getFeedbackSummary,
   getGradeNarrative,
   getRecommendationForGrade,
 } from "@/lib/clinicalFeedback";
@@ -718,14 +724,28 @@ function ClinicalInterpretation({
   batchResult?: BatchPatientResult;
   compact?: boolean;
 }) {
+  // Gather feedback from batch result or snapshot
+  const feedbackForMod = (mod: Modality) => {
+    const batchRow = batchResult?.perModality.find(r => r.modality === mod && !r.error);
+    return batchRow?.xrayData?.feedback ?? batchRow?.mriData?.feedback ?? undefined;
+  };
+
   const findingsForMod = (mod: Modality, grade: number) => {
     const batchRow = batchResult?.perModality.find(r => r.modality === mod && !r.error);
     if (batchRow?.findings.length) return batchRow.findings;
     const snap = patient.report?.modalitySnapshots?.find(s => s.modality === mod);
     if (snap?.findings.length) return snap.findings;
     if (patient.report?.modality === mod && patient.report.findings.length) return patient.report.findings;
-    return getFindingsForGrade(mod, grade);
+    return getFeedbackFindings(mod, grade, feedbackForMod(mod));
   };
+
+  // Recommendations: prefer batch feedback, fall back to grade-based
+  const primaryFeedback = feedbackForMod("xray") ?? feedbackForMod("mri");
+  const recommendations = getFeedbackRecommendations(analysis.finalGrade, primaryFeedback);
+  const limitations = getFeedbackLimitations(primaryFeedback);
+  const evidence = getFeedbackEvidence(primaryFeedback);
+  const backendSources = getFeedbackSources(primaryFeedback);
+
   return (
     <div className="space-y-3">
       <div className="p-4 rounded-xl border bg-card">
@@ -747,7 +767,7 @@ function ClinicalInterpretation({
         <p className="text-sm leading-relaxed text-foreground/90 mb-3">
           The AI ensemble classified this {patient.age}-year-old {patient.gender.toLowerCase()} patient
           (BMI {patient.bmi}) as <span className="font-medium">Kellgren–Lawrence Grade {analysis.finalGrade} osteoarthritis</span> with
-          a fused confidence of {analysis.finalConfidence}%. {getGradeNarrative(analysis.finalGrade)}
+          a fused confidence of {analysis.finalConfidence}%. {getFeedbackSummary(analysis.finalGrade, primaryFeedback)}
           {analysis.perModality.length > 1 && " Multi-modality fusion of plain radiograph and MRI inputs strengthens the structural assessment by combining osseous evaluation from X-ray with soft-tissue (cartilage, meniscus, synovium) evaluation from MRI."}
         </p>
         <div className="space-y-3">
@@ -773,12 +793,46 @@ function ClinicalInterpretation({
             );
           })}
         </div>
+
+        {/* Recommendations */}
         <div className="mt-3 p-3 rounded-lg bg-primary/5 border border-primary/20">
           <p className="text-[10px] uppercase tracking-wider font-semibold text-primary mb-1">Recommended next steps</p>
-          <p className="text-xs text-foreground/90 leading-relaxed">
-            {getRecommendationForGrade(analysis.finalGrade)}
-          </p>
+          <ul className="space-y-1">
+            {recommendations.map((rec, i) => (
+              <li key={i} className="flex items-start gap-2 text-xs text-foreground/90 leading-relaxed">
+                <span className="w-1 h-1 rounded-full bg-primary mt-1.5 flex-shrink-0" />{rec}
+              </li>
+            ))}
+          </ul>
         </div>
+
+        {/* Evidence (if available from backend) */}
+        {evidence.length > 0 && (
+          <div className="mt-3 p-3 rounded-lg bg-muted/20 border">
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-muted-foreground mb-1">Radiological evidence</p>
+            <ul className="space-y-1">
+              {evidence.map((e, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground leading-relaxed">
+                  <span className="w-1 h-1 rounded-full bg-muted-foreground mt-1.5 flex-shrink-0" />{e}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {/* Limitations */}
+        {limitations.length > 0 && (
+          <div className="mt-3 p-3 rounded-lg bg-warning/5 border border-warning/20">
+            <p className="text-[10px] uppercase tracking-wider font-semibold text-warning mb-1">Limitations & caveats</p>
+            <ul className="space-y-1">
+              {limitations.map((lim, i) => (
+                <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground leading-relaxed">
+                  <span className="w-1 h-1 rounded-full bg-warning mt-1.5 flex-shrink-0" />{lim}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
       </div>
 
       {!compact && (
@@ -789,10 +843,10 @@ function ClinicalInterpretation({
             <span className="text-[10px] text-muted-foreground">Evidence base for this classification</span>
           </div>
           <ol className="space-y-2.5 list-decimal list-inside">
-            {medicalReferences.map((r, i) => (
+            {(backendSources.length ? backendSources.map(c => ({ citation: c, note: "" })) : medicalReferences).map((r, i) => (
               <li key={i} className="text-xs leading-relaxed">
                 <span className="text-foreground/90">{r.citation}</span>
-                <p className="text-[11px] text-muted-foreground mt-0.5 ml-4">{r.note}</p>
+                {r.note && <p className="text-[11px] text-muted-foreground mt-0.5 ml-4">{r.note}</p>}
               </li>
             ))}
           </ol>
@@ -1196,11 +1250,16 @@ function BatchModalityDetail({ row }: { row: import("@/lib/batchAnalysis").Batch
             {modelRows.map(m => (
               <div key={m.id} className="px-3 py-2 flex items-center justify-between gap-2 text-xs">
                 <span className="font-medium truncate">{m.name}</span>
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-3 flex-shrink-0">
                   {m.gradeDisplay ?? (m.grade != null ? <GradeBadge grade={m.grade} /> : null)}
                   <span className="text-[11px] tabular-nums text-muted-foreground">
                     {m.confidenceDisplay ?? `${m.confidence.toFixed(1)}%`}
                   </span>
+                  {m.gflops != null && (
+                    <span className="text-[10px] tabular-nums text-muted-foreground/70" title={`${m.gflops.toFixed(2)} GFLOPs · ${m.paramsM?.toFixed(1) ?? "?"}M params`}>
+                      {m.gflops.toFixed(1)}G
+                    </span>
+                  )}
                 </div>
               </div>
             ))}
@@ -3280,10 +3339,12 @@ function DiagnosticWorkspace({
                   </span>
                 </div>
                 <div className="overflow-hidden rounded-lg border">
-                  <div className="grid grid-cols-12 gap-2 px-3 py-2 bg-muted/50 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-                    <div className="col-span-6">Model</div>
-                    <div className="col-span-2 text-center">Grade</div>
-                    <div className="col-span-4">Confidence</div>
+                  <div className="grid grid-cols-[5fr_2fr_4fr_3fr_2fr] gap-2 px-3 py-2 bg-muted/50 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                    <div>Model</div>
+                    <div className="text-center">Grade</div>
+                    <div>Confidence</div>
+                    <div className="text-right">FLOPs</div>
+                    <div className="text-right">Params</div>
                   </div>
                   {modelRows.map((m) => {
                     const isEnsemble = activeModality === "xray" && (m.isEnsemble ?? m.id === "ensemble");
@@ -3306,13 +3367,13 @@ function DiagnosticWorkspace({
                           if (activeModality === "mri") selectOnlyMriStage(m.id);
                         }}
                         className={cn(
-                          "w-full grid grid-cols-12 gap-2 px-3 py-2 items-center text-xs border-t text-left transition-colors",
+                          "w-full grid grid-cols-[5fr_2fr_4fr_3fr_2fr] gap-2 px-3 py-2 items-center text-xs border-t text-left transition-colors",
                           (isEnsemble || isPrimary) && "bg-primary/5",
                           rowClickable && "hover:bg-muted/50 cursor-pointer",
                           isSelected && "ring-1 ring-inset ring-primary/30 bg-primary/5",
                         )}
                       >
-                        <div className="col-span-6 flex items-center gap-2 min-w-0">
+                        <div className="flex items-center gap-2 min-w-0">
                           <span className="font-medium truncate">{m.name}</span>
                           {isEnsemble && (
                             <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">Ensemble</span>
@@ -3324,14 +3385,14 @@ function DiagnosticWorkspace({
                             <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Visible</span>
                           )}
                         </div>
-                        <div className="col-span-2 flex justify-center">
+                        <div className="flex justify-center">
                           {m.gradeDisplay ? (
                             <span className="text-[10px] font-medium text-muted-foreground">{m.gradeDisplay}</span>
                           ) : (
                             <GradeBadge grade={m.grade} />
                           )}
                         </div>
-                        <div className="col-span-4">
+                        <div>
                           {m.confidenceDisplay ? (
                             <span className="text-[10px] text-muted-foreground truncate block">{m.confidenceDisplay}</span>
                           ) : (
@@ -3341,6 +3402,20 @@ function DiagnosticWorkspace({
                               </div>
                               <span className="text-mono text-[10px] text-muted-foreground w-10 text-right">{m.confidence.toFixed(1)}%</span>
                             </div>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          {m.gflops != null ? (
+                            <span className="text-mono text-[10px] text-muted-foreground">{m.gflops.toFixed(2)}G</span>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground/40">—</span>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          {m.paramsM != null ? (
+                            <span className="text-mono text-[10px] text-muted-foreground">{m.paramsM.toFixed(1)}M</span>
+                          ) : (
+                            <span className="text-[10px] text-muted-foreground/40">—</span>
                           )}
                         </div>
                       </button>

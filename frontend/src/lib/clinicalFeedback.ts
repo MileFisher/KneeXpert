@@ -1,4 +1,5 @@
 import type { Modality } from "@/data/patients";
+import type { FeedbackBundle } from "@/lib/diagnosticApi";
 
 /** Kellgren–Lawrence grade labels (KL 0–4). */
 export const GRADE_LABELS: Record<number, string> = {
@@ -101,4 +102,71 @@ export function getRecommendationForGrade(grade: number): string {
 
 export function getGradeLabel(grade: number): string {
   return GRADE_LABELS[clampGrade(grade)] ?? "Unknown";
+}
+
+// ── FeedbackBundle helpers ─────────────────────────────────────────────────────
+
+/** Extract findings from a FeedbackBundle, falling back to grade-based lookup. */
+export function getFeedbackFindings(
+  modality: Modality,
+  grade: number,
+  feedback?: FeedbackBundle | null,
+): string[] {
+  if (feedback?.key_findings?.length) return feedback.key_findings;
+  return getFindingsForGrade(modality, grade);
+}
+
+/** Extract recommendations from a FeedbackBundle, falling back to grade-based text. */
+export function getFeedbackRecommendations(
+  grade: number,
+  feedback?: FeedbackBundle | null,
+): string[] {
+  if (feedback?.recommendations?.length) return feedback.recommendations;
+  return [getRecommendationForGrade(grade)];
+}
+
+/** Extract limitations from a FeedbackBundle. */
+export function getFeedbackLimitations(
+  feedback?: FeedbackBundle | null,
+): string[] {
+  if (feedback?.limitations?.length) return feedback.limitations;
+  return [
+    "AI-assisted analysis — findings should be confirmed by a qualified radiologist.",
+    "Model confidence reflects statistical certainty, not clinical significance.",
+  ];
+}
+
+/** Extract evidence descriptors from a FeedbackBundle. */
+export function getFeedbackEvidence(
+  feedback?: FeedbackBundle | null,
+): string[] {
+  return feedback?.evidence ?? [];
+}
+
+/** Extract reference sources from a FeedbackBundle. */
+export function getFeedbackSources(
+  feedback?: FeedbackBundle | null,
+): string[] {
+  return feedback?.sources ?? [];
+}
+
+/** Get clinical summary from a FeedbackBundle, falling back to grade narrative. */
+export function getFeedbackSummary(
+  grade: number,
+  feedback?: FeedbackBundle | null,
+): string {
+  if (feedback?.summary) return feedback.summary;
+  return getGradeNarrative(grade);
+}
+
+/** Get severity tag from a FeedbackBundle. */
+export function getFeedbackSeverity(
+  grade: number,
+  feedback?: FeedbackBundle | null,
+): string {
+  if (feedback?.severity) return feedback.severity;
+  const labels: Record<number, string> = {
+    0: "normal", 1: "doubtful", 2: "mild", 3: "moderate", 4: "severe",
+  };
+  return labels[clampGrade(grade)] ?? "unknown";
 }

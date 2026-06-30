@@ -84,6 +84,13 @@ Test data*/
 *.hdf5
 *.cache
 
+# === Claude Code / AI assistant (kept local, never committed) ===
+CLAUDE.md
+CLAUDE.local.md
+**/CLAUDE.md
+.claude/
+.mcp.json
+
 # === OS / IDE ===
 .DS_Store
 .idea/

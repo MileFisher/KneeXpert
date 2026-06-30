@@ -20,6 +20,26 @@ export type XrayModelCatalogEntry = {
   family: string;
   variant: string;
   weights_file: string;
+  gflops?: number;
+  params_m?: number;
+};
+
+/** Structured clinical feedback from the backend feedback engine. */
+export type FeedbackBundle = {
+  summary: string;
+  key_findings: string[];
+  recommendations: string[];
+  limitations: string[];
+  evidence: string[];
+  sources: string[];
+  grade_label: string;
+  severity: string;
+};
+
+/** FLOPs data for a single model. */
+export type ModelFlopsEntry = {
+  gflops: number;
+  params_m: number;
 };
 
 export type XrayPredictResponse = {
@@ -34,6 +54,8 @@ export type XrayPredictResponse = {
   models_used: string[];
   model_count?: number;
   ensemble_display_name?: string;
+  feedback?: FeedbackBundle;
+  model_flops?: Record<string, ModelFlopsEntry>;
 };
 
 export type MriLabelPrediction = {
@@ -101,6 +123,8 @@ export type MriPredictResponse = {
   ground_truth_labels?: string[];
   ground_truth_feedback?: string[];
   skm_tea_categories?: { id: number; name: string }[];
+  feedback?: FeedbackBundle;
+  model_flops?: Record<string, ModelFlopsEntry>;
 };
 
 export type BackboneHealth = {
@@ -112,6 +136,11 @@ export type BackboneHealth = {
   mri_pipeline_ready?: boolean;
   mri_sample_available?: boolean;
   mri_sample_filename?: string | null;
+  model_flops?: {
+    xray_models: Record<string, { gflops: number; params_m: number }>;
+    mri_models: Record<string, { gflops: number; params_m: number; display_name: string }>;
+    total_pipeline_gflops: Record<string, number>;
+  };
 };
 
 function postFormWithProgress<T>(

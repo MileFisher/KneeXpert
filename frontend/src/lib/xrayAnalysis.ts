@@ -1,11 +1,12 @@
-import type { XrayPredictResponse } from "@/lib/diagnosticApi";
+import type { FeedbackBundle, XrayPredictResponse } from "@/lib/diagnosticApi";
 import { gradcamToDataUrl } from "@/lib/diagnosticApi";
-import { getFindingsForGrade } from "@/lib/clinicalFeedback";
+import { getFeedbackFindings } from "@/lib/clinicalFeedback";
 
 export type WorkspaceAnalysisResult = {
   grade: number;
   confidence: number;
   findings: string[];
+  feedback?: FeedbackBundle;
 };
 
 export type ModelPerformanceRow = {
@@ -21,6 +22,10 @@ export type ModelPerformanceRow = {
   gradeDisplay?: string;
   /** Override confidence column (e.g. slice count). */
   confidenceDisplay?: string;
+  /** FLOPs in GFLOPS. */
+  gflops?: number;
+  /** Parameters in millions. */
+  paramsM?: number;
 };
 
 export type GradcamViewItem = {
@@ -37,17 +42,21 @@ export function xrayResponseToResult(data: XrayPredictResponse): WorkspaceAnalys
   return {
     grade,
     confidence: data.confidence,
-    findings: getFindingsForGrade("xray", grade),
+    findings: getFeedbackFindings("xray", grade, data.feedback),
+    feedback: data.feedback,
   };
 }
 
 export function buildXrayModelRows(data: XrayPredictResponse): ModelPerformanceRow[] {
+  const flopsMap = data.model_flops ?? {};
   const rows: ModelPerformanceRow[] = Object.entries(data.individual_results).map(([id, r]) => ({
     id,
     name: r.display_name ?? id,
     grade: r.grade,
     confidence: r.confidence,
     gradcamUrl: gradcamToDataUrl(r.gradcam_base64),
+    gflops: flopsMap[id]?.gflops,
+    paramsM: flopsMap[id]?.params_m,
   }));
   rows.push({
     id: "ensemble",

@@ -3,7 +3,7 @@ import type { CohortInputEntry } from "@/lib/cohortTypes";
 import { predictMri, predictMriSample, predictXray, type MriPredictResponse, type XrayPredictResponse } from "@/lib/diagnosticApi";
 import { mriResponseToResult } from "@/lib/mriAnalysis";
 import { buildReportDiagnosisAssets } from "@/lib/reportSnapshot";
-import { getFindingsForGrade } from "@/lib/clinicalFeedback";
+import { getFeedbackFindings } from "@/lib/clinicalFeedback";
 import { xrayResponseToResult } from "@/lib/xrayAnalysis";
 import type { ReportDiagnosisAssets } from "@/lib/reportSnapshot";
 
@@ -139,7 +139,7 @@ export async function runPatientBatchAnalysis(
         modality: mod,
         grade: 0,
         confidence: 0,
-        findings: getFindingsForGrade(mod, 0),
+        findings: getFeedbackFindings(mod, 0),
         modelUsed: mod === "xray" ? "Ensemble" : "MACS-Net + DeiT-S",
         inputFileName: inputs?.[mod]?.fileName ?? "unknown",
         view,

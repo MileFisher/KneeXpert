@@ -1,5 +1,8 @@
-"""Predefined KL grade clinical feedback (0–4) for X-ray ensemble output."""
+"""KL grade clinical feedback (0–4) — delegates to feedback_engine."""
 
+from feedback_engine import findings_for_grade as _engine_findings
+
+# Backward-compatible constant for any direct imports
 FINDINGS_BY_GRADE: dict[int, list[str]] = {
     0: ["No radiographic features of osteoarthritis.", "Joint space preserved."],
     1: ["Doubtful joint space narrowing.", "Possible early osteophytic change."],
@@ -22,5 +25,5 @@ FINDINGS_BY_GRADE: dict[int, list[str]] = {
 
 
 def findings_for_grade(grade: int) -> list[str]:
-    g = max(0, min(4, int(grade)))
-    return list(FINDINGS_BY_GRADE.get(g, FINDINGS_BY_GRADE[0]))
+    """Return findings list — uses the unified feedback engine."""
+    return _engine_findings(grade)

@@ -15,6 +15,8 @@ from xray.ensemble import predict_xray
 from mri.label_summary import parse_label_summary
 from mri.pipeline import mri_models_available, predict_mri
 from xray import DEFAULT_ENSEMBLE_MODELS, MODELS_CONFIG, ModelLoader, all_available_model_ids
+from feedback_engine import generate_feedback
+from model_profiler import get_all_flops, get_model_flops_for_response
 
 app = FastAPI(title="KneeXpert Backbone API", version="1.0.0")
 
@@ -33,17 +35,28 @@ VALID_MODELS = set(_loader.list_available())
 @app.get("/health")
 async def health_check():
     mri_status = mri_models_available()
+    catalog = _loader.model_catalog()
+    flops_data = get_all_flops()
+
+    # Enrich model catalog with FLOPs
+    for entry in catalog:
+        model_id = entry["id"]
+        if model_id in flops_data.get("xray_models", {}):
+            entry["gflops"] = flops_data["xray_models"][model_id]["gflops"]
+            entry["params_m"] = flops_data["xray_models"][model_id]["params_m"]
+
     return {
         "status": "healthy",
         "service": "kneexpert-backbone",
         "xray_models_available": _loader.list_available(),
-        "model_catalog": _loader.model_catalog(),
+        "model_catalog": catalog,
         "default_ensemble": DEFAULT_ENSEMBLE_MODELS,
         "mri_models_available": mri_status,
         "mri_pipeline_ready": all(mri_status.values()),
         "mri_sample_available": SAMPLE_MRI_PATH.is_file(),
         "mri_sample_filename": SAMPLE_MRI_PATH.name if SAMPLE_MRI_PATH.is_file() else None,
         "mri_label_summary_available": LABEL_SUMMARY_PATH.is_file(),
+        "model_flops": flops_data,
     }
 
 
@@ -80,6 +93,17 @@ async def predict_xray_single(
             raise HTTPException(status_code=400, detail="Empty file.")
 
         result = predict_xray(contents, filename=file.filename or "scan.jpg", model_names=selected)
+
+        # Inject structured feedback
+        result["feedback"] = generate_feedback(
+            grade=result.get("grade", 0),
+            modality="xray",
+            confidence=result.get("confidence", 0),
+        )
+
+        # Inject model FLOPs
+        result["model_flops"] = get_model_flops_for_response(result.get("models_used", selected))
+
         return JSONResponse(content=result)
     except HTTPException:
         raise
@@ -110,6 +134,21 @@ async def predict_mri_single(
 
         kwargs = {"threshold": threshold} if threshold is not None else {}
         result = predict_mri(file_bytes=contents, filename=file.filename or "scan.nii.gz", **kwargs)
+
+        # Inject structured feedback from MRI predictions
+        positive_names = [
+            d["name"] for d in result.get("multilabel_predictions", []) if d.get("predicted")
+        ]
+        result["feedback"] = generate_feedback(
+            grade=result.get("grade", 0),
+            modality="mri",
+            confidence=result.get("confidence", 0),
+            positive_labels=positive_names,
+        )
+
+        # Inject model FLOPs
+        result["model_flops"] = get_model_flops_for_response(result.get("models_used", []))
+
         return JSONResponse(content=result)
     except HTTPException:
         raise
@@ -138,6 +177,21 @@ async def predict_mri_sample(threshold: float | None = Form(default=None)):
         kwargs = {"threshold": threshold} if threshold is not None else {}
         result = predict_mri(file_path=str(SAMPLE_MRI_PATH), filename=SAMPLE_MRI_PATH.name, **kwargs)
         result["sample_mode"] = True
+
+        # Inject structured feedback from MRI predictions
+        positive_names = [
+            d["name"] for d in result.get("multilabel_predictions", []) if d.get("predicted")
+        ]
+        result["feedback"] = generate_feedback(
+            grade=result.get("grade", 0),
+            modality="mri",
+            confidence=result.get("confidence", 0),
+            positive_labels=positive_names,
+        )
+
+        # Inject model FLOPs
+        result["model_flops"] = get_model_flops_for_response(result.get("models_used", []))
+
         return JSONResponse(content=result)
     except HTTPException:
         raise
@@ -162,9 +216,14 @@ async def predict_batch(
             if not contents:
                 continue
             try:
-                batch_results.append(
-                    predict_xray(contents, filename=file.filename or "scan.jpg", model_names=selected)
+                r = predict_xray(contents, filename=file.filename or "scan.jpg", model_names=selected)
+                r["feedback"] = generate_feedback(
+                    grade=r.get("grade", 0),
+                    modality="xray",
+                    confidence=r.get("confidence", 0),
                 )
+                r["model_flops"] = get_model_flops_for_response(r.get("models_used", selected))
+                batch_results.append(r)
             except Exception:
                 continue
 

@@ -1,4 +1,4 @@
-import type { MriPredictResponse, MriSliceGalleryEntry } from "@/lib/diagnosticApi";
+import type { FeedbackBundle, MriPredictResponse, MriSliceGalleryEntry } from "@/lib/diagnosticApi";
 import { gradcamToDataUrl, pngBase64ToDataUrl } from "@/lib/diagnosticApi";
 import type { ModelPerformanceRow, WorkspaceAnalysisResult } from "@/lib/xrayAnalysis";
 
@@ -15,21 +15,26 @@ export type MriComparisonView = {
 };
 
 export function mriResponseToResult(data: MriPredictResponse): WorkspaceAnalysisResult {
+  // Prefer backend structured feedback, then fall back to legacy fields
   const findings =
-    data.category_feedback?.length
-      ? data.category_feedback
-      : data.pathology_findings?.length
-        ? data.pathology_findings
-        : data.findings;
+    data.feedback?.key_findings?.length
+      ? data.feedback.key_findings
+      : data.category_feedback?.length
+        ? data.category_feedback
+        : data.pathology_findings?.length
+          ? data.pathology_findings
+          : data.findings;
 
   return {
     grade: data.grade,
     confidence: data.confidence,
     findings,
+    feedback: data.feedback,
   };
 }
 
 export function buildMriModelRows(data: MriPredictResponse): ModelPerformanceRow[] {
+  const flopsMap = data.model_flops ?? {};
   return [
     {
       id: "macs-net",
@@ -39,6 +44,8 @@ export function buildMriModelRows(data: MriPredictResponse): ModelPerformanceRow
       gradcamUrl: null,
       gradeDisplay: "Applied",
       confidenceDisplay: `${data.slices_processed} slices · axis ${data.volume_meta?.slice_axis ?? 2}`,
+      gflops: flopsMap["macs_net"]?.gflops,
+      paramsM: flopsMap["macs_net"]?.params_m,
     },
     {
       id: "deit-s",
@@ -47,6 +54,8 @@ export function buildMriModelRows(data: MriPredictResponse): ModelPerformanceRow
       confidence: data.confidence,
       gradcamUrl: gradcamToDataUrl(data.gradcam_base64 ?? data.preview?.gradcam_base64),
       isPrimary: true,
+      gflops: flopsMap["deit_small"]?.gflops,
+      paramsM: flopsMap["deit_small"]?.params_m,
     },
   ];
 }

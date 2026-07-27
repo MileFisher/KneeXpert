@@ -9,5 +9,9 @@ grad-cam>=1.4.8
 opencv-python-headless>=4.8.0
 nibabel>=5.0.0
 monai>=1.3.0
+# Required by monai.networks.nets.SwinUNETR (MACS-Net). MONAI declares it as an
+# optional dep and imports it lazily, so a missing einops only surfaces at
+# inference time as "No module named 'einops'".
+einops>=0.6.0
 timm>=0.9.0
 fvcore>=0.1.5

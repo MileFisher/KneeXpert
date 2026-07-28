@@ -38,10 +38,11 @@ async def health_check():
     catalog = _loader.model_catalog()
     flops_data = get_all_flops()
 
-    # Enrich model catalog with FLOPs
+    # Enrich model catalog with compute cost (both MAC and FLOP conventions)
     for entry in catalog:
         model_id = entry["id"]
         if model_id in flops_data.get("xray_models", {}):
+            entry["gmacs"] = flops_data["xray_models"][model_id]["gmacs"]
             entry["gflops"] = flops_data["xray_models"][model_id]["gflops"]
             entry["params_m"] = flops_data["xray_models"][model_id]["params_m"]
 
@@ -146,8 +147,11 @@ async def predict_mri_single(
             positive_labels=positive_names,
         )
 
-        # Inject model FLOPs
-        result["model_flops"] = get_model_flops_for_response(result.get("models_used", []))
+        # Inject model compute cost — slice count drives the study-level total
+        result["model_flops"] = get_model_flops_for_response(
+            result.get("models_used", []),
+            sampled_slices=result.get("slices_processed"),
+        )
 
         return JSONResponse(content=result)
     except HTTPException:
@@ -189,8 +193,11 @@ async def predict_mri_sample(threshold: float | None = Form(default=None)):
             positive_labels=positive_names,
         )
 
-        # Inject model FLOPs
-        result["model_flops"] = get_model_flops_for_response(result.get("models_used", []))
+        # Inject model compute cost — slice count drives the study-level total
+        result["model_flops"] = get_model_flops_for_response(
+            result.get("models_used", []),
+            sampled_slices=result.get("slices_processed"),
+        )
 
         return JSONResponse(content=result)
     except HTTPException:

@@ -68,10 +68,18 @@ CUSTOM_HEAD_EXTRA_GMACS = 0.01
 # ── MRI model compute ──────────────────────────────────────────────────────────
 # Note: "MACS" in MACS-Net is the model's name; "GMACs" is the unit. Unrelated.
 
-# MACS-Net: Swin-UNETR, feature_size=24, in=1, out=1, 128x128, spatial_dims=2.
-# Measured with fvcore on the actual MONAI Swin-UNETR architecture.
-MACS_NET_GMACS = 5.73
-MACS_NET_PARAMS_M = 62.19
+# MACS-Net: SwinUNETR(in_channels=1, out_channels=1, feature_size=24,
+# spatial_dims=2) at 128x128 — see mri/macs_net.py.
+#
+# Measured with fvcore on that exact architecture: conv 0.835 + linear 0.305 +
+# matmul 0.050 + norms 0.018 = 1.21 GMACs, 6.30M params.
+#
+# These previously read 5.73 GMACs / 62.19M params, which are the *3D*
+# Swin-UNETR feature_size=48 figures — a different network. The 10x parameter
+# gap is what exposed it: the sanity check rejected a correct 1.21 GMACs
+# reading for falling below a baseline that was itself wrong.
+MACS_NET_GMACS = 1.21
+MACS_NET_PARAMS_M = 6.30
 
 # DeiT-Small (deit_small_patch16_224): 224x224 input, 16x16 patches.
 # From timm / DeiT paper: ~4.6 GMACs, ~22M params.
@@ -106,23 +114,52 @@ MEASUREMENT_PLAUSIBILITY_FLOOR = 0.5
 # aten::bmm, aten::matmul. Those are real MACs and their absence is a genuine
 # undercount.
 NEGLIGIBLE_OPS: frozenset[str] = frozenset({
-    "aten::add",
-    "aten::add_",
+    # pooling
     "aten::adaptive_avg_pool2d",
     "aten::avg_pool2d",
+    "aten::max_pool2d",
+    # elementwise arithmetic
+    "aten::abs",
+    "aten::add",
+    "aten::add_",
+    "aten::div",
+    "aten::div_",
+    "aten::exp",
+    "aten::mul",
+    "aten::mul_",
+    "aten::ne",
+    "aten::neg",
+    "aten::rsub",
+    "aten::sqrt",
+    "aten::sub",
+    "aten::sub_",
+    # activations
+    "aten::gelu",
+    "aten::leaky_relu",
+    "aten::leaky_relu_",
+    "aten::relu",
+    "aten::relu_",
+    "aten::sigmoid",
+    "aten::silu",
+    "aten::softmax",
+    "aten::tanh",
+    # normalisation
     "aten::batch_norm",
+    "aten::group_norm",
+    "aten::instance_norm",
+    "aten::layer_norm",
+    # shape / memory movement (aten::roll is Swin's shifted-window op)
+    "aten::cat",
     "aten::clone",
     "aten::dropout",
     "aten::fill_",
     "aten::flatten",
-    "aten::gelu",
-    "aten::layer_norm",
-    "aten::max_pool2d",
-    "aten::mul",
-    "aten::mul_",
-    "aten::relu",
-    "aten::relu_",
-    "aten::softmax",
+    "aten::pad",
+    "aten::permute",
+    "aten::reshape",
+    "aten::roll",
+    "aten::transpose",
+    "aten::view",
 })
 
 

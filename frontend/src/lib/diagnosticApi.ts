@@ -64,6 +64,21 @@ export type ModelFlopsEntry = {
   measurement_warning?: string;
   /** The discarded fvcore figure, when one failed the plausibility check. */
   rejected_fvcore_gmacs?: number;
+  /**
+   * Why no measurement happened at all — missing checkpoint, missing fvcore,
+   * or a tracing failure. Distinct from `measurement_warning`, which reports a
+   * measurement that ran and was then rejected.
+   */
+  profiling_error?: string;
+};
+
+/** Combined cost of running a set of X-ray models over one image. */
+export type XrayEnsembleCost = {
+  gmacs: number;
+  gflops: number;
+  params_m: number;
+  model_count: number;
+  model_ids: string[];
 };
 
 /** Cost of one sampled MRI slice: 3 x MACS-Net + 1 x DeiT. */
@@ -91,9 +106,17 @@ export type MriStudyCost = {
  */
 export type ModelFlopsMap = {
   unit_note?: string;
+  /** X-ray: combined cost of the models that actually ran (2+ models only). */
+  ensemble_total?: XrayEnsembleCost;
   pipeline_per_sampled_slice?: MriPerSliceCost;
   pipeline_total?: MriStudyCost;
-  [modelId: string]: ModelFlopsEntry | MriPerSliceCost | MriStudyCost | string | undefined;
+  [modelId: string]:
+    | ModelFlopsEntry
+    | XrayEnsembleCost
+    | MriPerSliceCost
+    | MriStudyCost
+    | string
+    | undefined;
 };
 
 /** Look up one model's compute cost, narrowing past the aggregate keys. */
@@ -208,6 +231,9 @@ export type BackboneHealth = {
     mri_models: Record<string, ModelFlopsEntry & { display_name: string }>;
     totals: {
       xray_mean_per_model: { gmacs: number; gflops: number };
+      /** The recommended 3-model ensemble (matches `default_ensemble`). */
+      default_xray_ensemble: XrayEnsembleCost;
+      /** Every configured model — what `model_names="all"` runs. */
       xray_ensemble_all: { gmacs: number; gflops: number; model_count: number };
       mri_per_sampled_slice: MriPerSliceCost;
       mri_per_study_max: MriStudyCost;

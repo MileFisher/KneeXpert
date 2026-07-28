@@ -45,6 +45,11 @@ XRAY_MODEL_GMACS: dict[str, float] = {
 }
 
 # Parameter counts (millions) for standard torchvision models.
+#
+# These are the stock 1000-class ImageNet figures. This project swaps in a
+# 5-class head, so they run ~2M high (DenseNet201: 1920x1000 = 1.92M becomes
+# 1920x5 = 9.6k). Only a fallback — get_xray_flops() measures the real model
+# when fvcore is available, which is the normal path.
 XRAY_MODEL_PARAMS_M: dict[str, float] = {
     "densenet201": 20.01,
     "resnet101": 44.55,
@@ -53,7 +58,10 @@ XRAY_MODEL_PARAMS_M: dict[str, float] = {
     "vgg19_bn": 143.67,
 }
 
-# Custom MLP head adds ~5M params, ~0.01 GMACs (negligible).
+# Custom MLP head, as a rough fallback only. Measurement shows the real heads
+# are ~1.1M (DenseNet/ResNet50) to ~2.2M (VGG), so this overshoots — but it is
+# only reached when fvcore is unavailable. The GMACs delta is genuinely
+# negligible either way.
 CUSTOM_HEAD_EXTRA_PARAMS_M = 5.0
 CUSTOM_HEAD_EXTRA_GMACS = 0.01
 
@@ -88,6 +96,34 @@ DEIT_CALLS_PER_SAMPLED_SLICE = 1
 # correction (our constants are published figures for the stock architecture,
 # not this checkpoint), so it is accepted.
 MEASUREMENT_PLAUSIBILITY_FLOOR = 0.5
+
+# Ops fvcore lists as "unsupported" that contribute no multiply-accumulates
+# anyway. Pooling, elementwise arithmetic, normalisation and activations are
+# conventionally excluded from MAC counts, so their absence is correct rather
+# than an undercount — they must not trigger a lower-bound warning.
+#
+# Deliberately NOT here: aten::scaled_dot_product_attention, aten::einsum,
+# aten::bmm, aten::matmul. Those are real MACs and their absence is a genuine
+# undercount.
+NEGLIGIBLE_OPS: frozenset[str] = frozenset({
+    "aten::add",
+    "aten::add_",
+    "aten::adaptive_avg_pool2d",
+    "aten::avg_pool2d",
+    "aten::batch_norm",
+    "aten::clone",
+    "aten::dropout",
+    "aten::fill_",
+    "aten::flatten",
+    "aten::gelu",
+    "aten::layer_norm",
+    "aten::max_pool2d",
+    "aten::mul",
+    "aten::mul_",
+    "aten::relu",
+    "aten::relu_",
+    "aten::softmax",
+})
 
 
 # ── Cached results ─────────────────────────────────────────────────────────────
@@ -133,7 +169,14 @@ def _estimate_xray_flops(model_name: str, config: dict[str, Any]) -> dict[str, A
 
 
 def get_xray_flops() -> dict[str, dict[str, Any]]:
-    """Calculate compute cost for all configured X-ray models."""
+    """
+    Compute cost for all configured X-ray models.
+
+    Seeds every entry with the published architecture figure, then overwrites
+    with a live fvcore measurement where one is credible. Costs a few seconds
+    on the first call (all eight architectures are built and traced); cached
+    thereafter.
+    """
     global _xray_flops_cache
     if _xray_flops_cache is not None:
         return _xray_flops_cache
@@ -143,6 +186,8 @@ def get_xray_flops() -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {}
     for name, cfg in MODELS_CONFIG.items():
         result[name] = _estimate_xray_flops(name, cfg)
+
+    _measure_xray_with_fvcore(result)
 
     _xray_flops_cache = result
     return result
@@ -204,6 +249,68 @@ def is_plausible_measurement(measured_gmacs: float, estimated_gmacs: float) -> b
     return measured_gmacs >= estimated_gmacs * MEASUREMENT_PLAUSIBILITY_FLOOR
 
 
+def _apply_measurement(
+    entry: dict[str, Any],
+    measured_gmacs: float,
+    params_m: float,
+    unhandled_ops: list[str],
+) -> None:
+    """
+    Adopt or reject one fvcore measurement, in place.
+
+    Shared by the X-ray and MRI paths so both get identical semantics. Three
+    ways a measurement can lose to the architecture estimate:
+
+    1. It falls below the plausibility floor — treated as a counting failure.
+    2. Significant ops were skipped AND the result is below the estimate, so
+       the measurement is a known lower bound on a figure the estimate already
+       accounts for (DeiT's attention is the live example).
+    3. Anything raised while measuring (handled by the callers).
+
+    The parameter count is adopted unconditionally: numel() is exact and owes
+    nothing to op coverage.
+    """
+    estimated_gmacs = entry["gmacs"]
+    entry["params_m"] = round(params_m, 2)
+    significant = [op for op in unhandled_ops if op not in NEGLIGIBLE_OPS]
+
+    if not is_plausible_measurement(measured_gmacs, estimated_gmacs):
+        entry["rejected_fvcore_gmacs"] = round(measured_gmacs, 2)
+        detail = (
+            f" Ops with no fvcore handler: {', '.join(significant)}."
+            if significant
+            else (
+                " No significant ops were skipped, so the architecture estimate "
+                "itself is the more likely error — worth re-baselining."
+            )
+        )
+        entry["measurement_warning"] = (
+            f"fvcore reported {measured_gmacs:.2f} GMACs, under "
+            f"{MEASUREMENT_PLAUSIBILITY_FLOOR:.0%} of the {estimated_gmacs:.2f} GMACs "
+            f"architecture estimate — discarded as an undercount, keeping the estimate."
+            + detail
+        )
+        return
+
+    if significant and measured_gmacs < estimated_gmacs:
+        entry["rejected_fvcore_gmacs"] = round(measured_gmacs, 2)
+        entry["measurement_warning"] = (
+            f"fvcore reported {measured_gmacs:.2f} GMACs but has no handler for "
+            f"{', '.join(significant)}, making it a lower bound below the "
+            f"{estimated_gmacs:.2f} GMACs estimate — keeping the estimate, which "
+            f"accounts for those ops."
+        )
+        return
+
+    entry.update(_cost(measured_gmacs))
+    entry["method"] = "fvcore"
+    if significant:
+        entry["measurement_warning"] = (
+            f"fvcore has no handler for {', '.join(significant)}; the measured count "
+            f"exceeds the estimate anyway, so it is adopted as a lower bound."
+        )
+
+
 def _unhandled_ops(analysis: Any, limit: int = 4) -> list[str]:
     """Op names fvcore had no handler for — each contributed 0 to the total."""
     try:
@@ -241,41 +348,74 @@ def _measure_with_fvcore(result: dict[str, dict[str, Any]]) -> None:
             wrapper = getattr(module, getter_name)()
             wrapper.load()
 
-            estimated_gmacs = result[key]["gmacs"]
             dummy = torch.randn(*shape, device=device)
             analysis = FlopCountAnalysis(wrapper.model, dummy)
             analysis.unsupported_ops_warnings(False)
             analysis.uncalled_modules_warnings(False)
 
-            measured_gmacs = analysis.total() / 1e9
-            skipped = _unhandled_ops(analysis)
-
-            # Parameter counting is exact regardless of op coverage, so this
-            # figure is trustworthy even when the MAC count is not.
-            result[key]["params_m"] = round(
-                sum(p.numel() for p in wrapper.model.parameters()) / 1e6, 2
+            _apply_measurement(
+                result[key],
+                measured_gmacs=analysis.total() / 1e9,
+                params_m=sum(p.numel() for p in wrapper.model.parameters()) / 1e6,
+                unhandled_ops=_unhandled_ops(analysis),
             )
-
-            if not is_plausible_measurement(measured_gmacs, estimated_gmacs):
-                result[key]["rejected_fvcore_gmacs"] = round(measured_gmacs, 2)
-                result[key]["measurement_warning"] = (
-                    f"fvcore reported {measured_gmacs:.2f} GMACs, under "
-                    f"{MEASUREMENT_PLAUSIBILITY_FLOOR:.0%} of the "
-                    f"{estimated_gmacs:.2f} GMACs architecture estimate — discarded "
-                    f"as an undercount, keeping the estimate."
-                    + (f" Ops with no fvcore handler: {', '.join(skipped)}." if skipped else "")
-                )
-                continue
-
-            result[key].update(_cost(measured_gmacs))
-            result[key]["method"] = "fvcore"
-            if skipped:
-                result[key]["measurement_warning"] = (
-                    f"fvcore has no handler for {', '.join(skipped)} — the measured "
-                    f"count is a lower bound."
-                )
         except Exception:
             continue
+
+
+def _measure_xray_with_fvcore(result: dict[str, dict[str, Any]]) -> None:
+    """
+    Measure every configured X-ray model with fvcore.
+
+    Needs no checkpoints. FLOPs and parameter counts depend only on the
+    architecture, and ModelLoader builds the architecture before it touches the
+    .pth file (see loader._load_model), so this produces real figures even on a
+    clone with no weights on disk — unlike the MRI path, which must `.load()`.
+
+    Models are built one at a time and released, so peak memory is one model
+    (VGG19 at ~570 MB) rather than all eight at once.
+    """
+    try:
+        from fvcore.nn import FlopCountAnalysis
+    except ImportError:
+        return
+
+    # Instantiated only for its architecture builders; no weights are read.
+    # loader.py is off-limits for edits, so we call what it already exposes.
+    from xray.loader import MODELS_CONFIG, ModelLoader
+
+    loader = ModelLoader()
+    dummy = torch.randn(1, 3, 224, 224)
+
+    for name, cfg in MODELS_CONFIG.items():
+        entry = result.get(name)
+        if entry is None:
+            continue
+        model = None
+        try:
+            model = (
+                loader._create_custom_model(cfg["custom_arch"])
+                if cfg.get("is_custom")
+                else loader._create_standard_model(cfg["type"])
+            )
+            if model is None:
+                continue
+            model.eval()
+
+            analysis = FlopCountAnalysis(model, dummy)
+            analysis.unsupported_ops_warnings(False)
+            analysis.uncalled_modules_warnings(False)
+
+            _apply_measurement(
+                entry,
+                measured_gmacs=analysis.total() / 1e9,
+                params_m=sum(p.numel() for p in model.parameters()) / 1e6,
+                unhandled_ops=_unhandled_ops(analysis),
+            )
+        except Exception:
+            continue
+        finally:
+            del model
 
 
 def mri_study_cost(sampled_slices: int | None = None) -> dict[str, Any]:

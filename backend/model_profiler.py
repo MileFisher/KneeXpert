@@ -23,6 +23,7 @@ consumer never has to guess which convention a number follows.
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 import torch
@@ -314,7 +315,7 @@ def _apply_measurement(
     if not is_plausible_measurement(measured_gmacs, estimated_gmacs):
         entry["rejected_fvcore_gmacs"] = round(measured_gmacs, 2)
         detail = (
-            f" Ops with no fvcore handler: {', '.join(significant)}."
+            f" Ops with no fvcore handler: {_format_ops(significant)}."
             if significant
             else (
                 " No significant ops were skipped, so the architecture estimate "
@@ -333,7 +334,7 @@ def _apply_measurement(
         entry["rejected_fvcore_gmacs"] = round(measured_gmacs, 2)
         entry["measurement_warning"] = (
             f"fvcore reported {measured_gmacs:.2f} GMACs but has no handler for "
-            f"{', '.join(significant)}, making it a lower bound below the "
+            f"{_format_ops(significant)}, making it a lower bound below the "
             f"{estimated_gmacs:.2f} GMACs estimate — keeping the estimate, which "
             f"accounts for those ops."
         )
@@ -343,18 +344,47 @@ def _apply_measurement(
     entry["method"] = "fvcore"
     if significant:
         entry["measurement_warning"] = (
-            f"fvcore has no handler for {', '.join(significant)}; the measured count "
+            f"fvcore has no handler for {_format_ops(significant)}; the measured count "
             f"exceeds the estimate anyway, so it is adopted as a lower bound."
         )
 
 
-def _unhandled_ops(analysis: Any, limit: int = 4) -> list[str]:
-    """Op names fvcore had no handler for — each contributed 0 to the total."""
+def _unhandled_ops(analysis: Any) -> list[str]:
+    """
+    Every op name fvcore had no handler for — each contributed 0 to the total.
+
+    Returns the COMPLETE list. Callers filter it against NEGLIGIBLE_OPS to
+    decide whether a measurement can be trusted, so truncating here would
+    silently pass a bad measurement: op names are sorted alphabetically and
+    the ones that matter sort late (aten::scaled_dot_product_attention under
+    's', aten::matmul under 'm'), while cheap elementwise ops cluster under
+    'a'. Truncate only for display — see _format_ops().
+    """
     try:
-        skipped = analysis.unsupported_ops()
+        return sorted(analysis.unsupported_ops())
     except Exception:
         return []
-    return sorted(skipped)[:limit]
+
+
+def _format_ops(ops: list[str], limit: int = 6) -> str:
+    """Comma-joined op names for a warning message, capped for readability."""
+    if len(ops) <= limit:
+        return ", ".join(ops)
+    return ", ".join(ops[:limit]) + f", +{len(ops) - limit} more"
+
+
+def _record_error(entries: Iterable[dict[str, Any]], reason: str) -> None:
+    """
+    Note on each entry why profiling never produced a measurement.
+
+    Falling back to the architecture estimate is a legitimate outcome, but a
+    silent one — without this the payload gives no way to distinguish "measured
+    and the estimate won" from "fvcore is missing" or "the checkpoint isn't on
+    disk". Distinct from `measurement_warning`, which reports a measurement
+    that DID happen and was then rejected.
+    """
+    for entry in entries:
+        entry["profiling_error"] = reason
 
 
 def _measure_with_fvcore(result: dict[str, dict[str, Any]]) -> None:
@@ -364,12 +394,15 @@ def _measure_with_fvcore(result: dict[str, dict[str, Any]]) -> None:
     Leaves the architecture estimate in place on any failure — including a
     measurement that fails the plausibility check — so a silently-undercounted
     Swin attention stack can never quietly replace a good published figure.
-    `method` always says which figure the caller ended up with, and
-    `measurement_warning` explains anything that went wrong.
+    `method` always says which figure the caller ended up with,
+    `measurement_warning` explains a measurement that was rejected, and
+    `profiling_error` explains a measurement that never happened at all
+    (missing checkpoint, missing dependency, tracing failure).
     """
     try:
         from fvcore.nn import FlopCountAnalysis
-    except ImportError:
+    except ImportError as exc:
+        _record_error(result.values(), f"fvcore unavailable: {exc}")
         return
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -396,7 +429,8 @@ def _measure_with_fvcore(result: dict[str, dict[str, Any]]) -> None:
                 params_m=sum(p.numel() for p in wrapper.model.parameters()) / 1e6,
                 unhandled_ops=_unhandled_ops(analysis),
             )
-        except Exception:
+        except Exception as exc:
+            _record_error([result[key]], f"{type(exc).__name__}: {exc}")
             continue
 
 
@@ -414,7 +448,8 @@ def _measure_xray_with_fvcore(result: dict[str, dict[str, Any]]) -> None:
     """
     try:
         from fvcore.nn import FlopCountAnalysis
-    except ImportError:
+    except ImportError as exc:
+        _record_error(result.values(), f"fvcore unavailable: {exc}")
         return
 
     # Instantiated only for its architecture builders; no weights are read.
@@ -436,6 +471,11 @@ def _measure_xray_with_fvcore(result: dict[str, dict[str, Any]]) -> None:
                 else loader._create_standard_model(cfg["type"])
             )
             if model is None:
+                _record_error(
+                    [entry],
+                    f"loader could not build architecture for "
+                    f"{cfg.get('custom_arch') or cfg.get('type')!r}",
+                )
                 continue
             model.eval()
 
@@ -449,7 +489,8 @@ def _measure_xray_with_fvcore(result: dict[str, dict[str, Any]]) -> None:
                 params_m=sum(p.numel() for p in model.parameters()) / 1e6,
                 unhandled_ops=_unhandled_ops(analysis),
             )
-        except Exception:
+        except Exception as exc:
+            _record_error([entry], f"{type(exc).__name__}: {exc}")
             continue
         finally:
             del model
@@ -489,8 +530,28 @@ def mri_study_cost(sampled_slices: int | None = None) -> dict[str, Any]:
     }
 
 
+def xray_ensemble_cost(model_ids: list[str]) -> dict[str, Any]:
+    """
+    Combined cost of running a specific set of X-ray models on one image.
+
+    An ensemble runs every member over the same input, so its cost is the sum.
+    Unknown ids are skipped and `model_count` reflects what was actually
+    counted, so a stale id can't silently inflate the total.
+    """
+    xray = get_xray_flops()
+    counted = [m for m in model_ids if m in xray]
+    return {
+        **_cost(sum(xray[m]["gmacs"] for m in counted)),
+        "params_m": round(sum(xray[m]["params_m"] for m in counted), 2),
+        "model_count": len(counted),
+        "model_ids": counted,
+    }
+
+
 def get_all_flops() -> dict[str, Any]:
     """Compute-cost summary for the health endpoint."""
+    from xray.loader import DEFAULT_ENSEMBLE_MODELS
+
     xray = get_xray_flops()
     mri = get_mri_flops()
     study = mri_study_cost()
@@ -504,6 +565,9 @@ def get_all_flops() -> dict[str, Any]:
         "mri_models": mri,
         "totals": {
             "xray_mean_per_model": _cost(xray_total_gmacs / model_count) if model_count else _cost(0),
+            # What the app recommends (health.default_ensemble) …
+            "default_xray_ensemble": xray_ensemble_cost(list(DEFAULT_ENSEMBLE_MODELS)),
+            # … versus every configured model, which is what model_names="all" runs.
             "xray_ensemble_all": {**_cost(xray_total_gmacs), "model_count": model_count},
             "mri_per_sampled_slice": study["per_sampled_slice"],
             "mri_per_study_max": study["per_study"],
@@ -539,10 +603,17 @@ def get_model_flops_for_response(
             "per": source["per"],
             "method": source["method"],
         }
-        for optional in ("calls_per_sampled_slice", "measurement_warning"):
+        for optional in ("calls_per_sampled_slice", "measurement_warning", "profiling_error"):
             if optional in source:
                 entry[optional] = source[optional]
         result[name] = entry
+
+    # X-ray: cost of the ensemble that actually ran, the counterpart to the
+    # MRI pipeline_total below. Skipped for a single model, where the per-model
+    # entry already says it.
+    xray_used = [m for m in model_names if m in xray]
+    if len(xray_used) > 1:
+        result["ensemble_total"] = xray_ensemble_cost(xray_used)
 
     # MRI pipeline: report both the per-slice unit cost and the study total.
     if "macs_net" in model_names and "deit_small" in model_names:

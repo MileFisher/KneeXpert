@@ -1,5 +1,5 @@
 import type { FeedbackBundle, MriPredictResponse, MriSliceGalleryEntry } from "@/lib/diagnosticApi";
-import { gradcamToDataUrl, pngBase64ToDataUrl } from "@/lib/diagnosticApi";
+import { getModelFlops, gradcamToDataUrl, pngBase64ToDataUrl } from "@/lib/diagnosticApi";
 import type { ModelPerformanceRow, WorkspaceAnalysisResult } from "@/lib/xrayAnalysis";
 
 export type MriViewMode = "raw" | "cleaned" | "artifact" | "gradcam";
@@ -34,7 +34,8 @@ export function mriResponseToResult(data: MriPredictResponse): WorkspaceAnalysis
 }
 
 export function buildMriModelRows(data: MriPredictResponse): ModelPerformanceRow[] {
-  const flopsMap = data.model_flops ?? {};
+  const macsCost = getModelFlops(data.model_flops, "macs_net");
+  const deitCost = getModelFlops(data.model_flops, "deit_small");
   return [
     {
       id: "macs-net",
@@ -44,8 +45,12 @@ export function buildMriModelRows(data: MriPredictResponse): ModelPerformanceRow
       gradcamUrl: null,
       gradeDisplay: "Applied",
       confidenceDisplay: `${data.slices_processed} slices · axis ${data.volume_meta?.slice_axis ?? 2}`,
-      gflops: flopsMap["macs_net"]?.gflops,
-      paramsM: flopsMap["macs_net"]?.params_m,
+      gmacs: macsCost?.gmacs,
+      gflops: macsCost?.gflops,
+      paramsM: macsCost?.params_m,
+      callsPerSlice: macsCost?.calls_per_sampled_slice,
+      costMethod: macsCost?.method,
+      costWarning: macsCost?.measurement_warning,
     },
     {
       id: "deit-s",
@@ -54,10 +59,36 @@ export function buildMriModelRows(data: MriPredictResponse): ModelPerformanceRow
       confidence: data.confidence,
       gradcamUrl: gradcamToDataUrl(data.gradcam_base64 ?? data.preview?.gradcam_base64),
       isPrimary: true,
-      gflops: flopsMap["deit_small"]?.gflops,
-      paramsM: flopsMap["deit_small"]?.params_m,
+      gmacs: deitCost?.gmacs,
+      gflops: deitCost?.gflops,
+      paramsM: deitCost?.params_m,
+      callsPerSlice: deitCost?.calls_per_sampled_slice,
+      costMethod: deitCost?.method,
+      costWarning: deitCost?.measurement_warning,
     },
   ];
+}
+
+/**
+ * Human-readable study-level compute cost for the MRI pipeline.
+ *
+ * Per-model rows show the cost of a *single forward pass*. A study runs
+ * MACS-Net 3x (the 2.5D z-1/z/z+1 stack) plus DeiT once for every sampled
+ * slice, so the study total is far larger than the sum of the rows.
+ */
+export function mriPipelineCostSummary(data: MriPredictResponse): string | null {
+  const perSlice = data.model_flops?.pipeline_per_sampled_slice;
+  const total = data.model_flops?.pipeline_total;
+  if (!perSlice || !total) return null;
+
+  const perSliceText =
+    `${perSlice.gflops.toFixed(1)} GFLOPs/slice ` +
+    `(${perSlice.macs_net_calls}x MACS-Net + ${perSlice.deit_calls}x DeiT-S)`;
+  const totalText =
+    `${total.gflops.toFixed(0)} GFLOPs across ${total.sampled_slices} sampled slices`;
+  const caveat = total.is_upper_bound ? " (upper bound)" : "";
+
+  return `Study compute: ${perSliceText} → ${totalText}${caveat}.`;
 }
 
 export function defaultSelectedMriStageIds(): Set<string> {

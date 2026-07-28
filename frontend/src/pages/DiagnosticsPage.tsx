@@ -16,6 +16,7 @@ import {
   buildGradcamViewItems,
   buildXrayModelRows,
   defaultSelectedModelIds,
+  formatModelCostTooltip,
   xrayResponseToResult,
   type ModelPerformanceRow,
 } from "@/lib/xrayAnalysis";
@@ -25,6 +26,7 @@ import {
   formatVolumeMeta,
   galleryImageForMode,
   getActiveGallerySlice,
+  mriPipelineCostSummary,
   mriResponseToResult,
   mriViewModeLabel,
   type MriViewMode,
@@ -1263,8 +1265,11 @@ function BatchModalityDetail({ row }: { row: import("@/lib/batchAnalysis").Batch
                     {m.confidenceDisplay ?? `${m.confidence.toFixed(1)}%`}
                   </span>
                   {m.gflops != null && (
-                    <span className="text-[10px] tabular-nums text-muted-foreground/70" title={`${m.gflops.toFixed(2)} GFLOPs · ${m.paramsM?.toFixed(1) ?? "?"}M params`}>
-                      {m.gflops.toFixed(1)}G
+                    <span
+                      className="text-[10px] tabular-nums text-muted-foreground/70"
+                      title={formatModelCostTooltip(m)}
+                    >
+                      {m.gflops.toFixed(1)}G{m.costWarning ? "*" : ""}
                     </span>
                   )}
                 </div>
@@ -2071,6 +2076,11 @@ function DiagnosticWorkspace({
       gradcamUrl: row.gradcamUrl,
     }));
   }, [activeModality, xrayApiData, mriApiData]);
+
+  const mriCostLine = useMemo(
+    () => (mriApiData ? mriPipelineCostSummary(mriApiData) : null),
+    [mriApiData],
+  );
 
   const mriPreviewDisplayUrl = mriApiData
     ? galleryImageForMode(getActiveGallerySlice(mriApiData, mriGallerySliceIdx), mriApiData.preview, mriViewMode)
@@ -3356,7 +3366,9 @@ function DiagnosticWorkspace({
                     <div>Model</div>
                     <div className="text-center">Grade</div>
                     <div>Confidence</div>
-                    <div className="text-right">FLOPs</div>
+                    <div className="text-right" title="Per forward pass. Hover a value for the GMACs equivalent.">
+                      GFLOPs
+                    </div>
                     <div className="text-right">Params</div>
                   </div>
                   {modelRows.map((m) => {
@@ -3419,7 +3431,15 @@ function DiagnosticWorkspace({
                         </div>
                         <div className="text-right">
                           {m.gflops != null ? (
-                            <span className="text-mono text-[10px] text-muted-foreground">{m.gflops.toFixed(2)}G</span>
+                            <span
+                              className="text-mono text-[10px] text-muted-foreground"
+                              title={formatModelCostTooltip(m)}
+                            >
+                              {m.gflops.toFixed(2)}G
+                              {m.costWarning && (
+                                <span className="text-warning" aria-label="incomplete measurement">*</span>
+                              )}
+                            </span>
                           ) : (
                             <span className="text-[10px] text-muted-foreground/40">—</span>
                           )}
@@ -3455,6 +3475,9 @@ function DiagnosticWorkspace({
                     <p className="text-[10px] text-muted-foreground mt-2">
                       2-stage pipeline (MACS-Net → DeiT-S). Click a row to toggle; double-click to view only that stage.
                     </p>
+                    {mriCostLine && (
+                      <p className="text-[10px] text-muted-foreground mt-1">{mriCostLine}</p>
+                    )}
                     <MriModelEvaluationPanel
                       data={mriApiData}
                       selectedIds={selectedMriStageIds}

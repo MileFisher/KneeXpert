@@ -20,6 +20,9 @@ export type XrayModelCatalogEntry = {
   family: string;
   variant: string;
   weights_file: string;
+  /** Multiply-accumulate ops — the figure torchvision/timm papers quote. */
+  gmacs?: number;
+  /** True floating-point ops = 2 x gmacs. */
   gflops?: number;
   params_m?: number;
 };
@@ -36,11 +39,74 @@ export type FeedbackBundle = {
   severity: string;
 };
 
-/** FLOPs data for a single model. */
+/**
+ * Compute cost for a single model.
+ *
+ * `gmacs` is the source-of-truth count (multiply-accumulates, the fvcore /
+ * torchvision convention that papers usually mislabel as "FLOPs"); `gflops`
+ * is the true floating-point count, `2 x gmacs`.
+ */
 export type ModelFlopsEntry = {
+  gmacs: number;
   gflops: number;
   params_m: number;
+  /** "image" for X-ray models, "forward_pass" for MRI pipeline stages. */
+  per: "image" | "forward_pass";
+  /** Where the figure came from: a live fvcore count or a published estimate. */
+  method: "fvcore" | "architecture_estimate";
+  /** MRI only — MACS-Net runs 3x per sampled slice (2.5D stacking). */
+  calls_per_sampled_slice?: number;
+  /**
+   * Set when fvcore's count was incomplete: either it was discarded as an
+   * undercount (`method` stays "architecture_estimate") or it was adopted but
+   * some ops had no handler, making it a lower bound.
+   */
+  measurement_warning?: string;
+  /** The discarded fvcore figure, when one failed the plausibility check. */
+  rejected_fvcore_gmacs?: number;
 };
+
+/** Cost of one sampled MRI slice: 3 x MACS-Net + 1 x DeiT. */
+export type MriPerSliceCost = {
+  gmacs: number;
+  gflops: number;
+  macs_net_calls: number;
+  deit_calls: number;
+};
+
+/** Study-level MRI cost = per-sampled-slice cost x slices processed. */
+export type MriStudyCost = {
+  gmacs: number;
+  gflops: number;
+  sampled_slices: number;
+  /** True when the backend fell back to MAX_SAMPLES_PER_STUDY. */
+  is_upper_bound: boolean;
+  params_m?: number;
+};
+
+/**
+ * `model_flops` payload: per-model entries keyed by model id, plus the two
+ * MRI aggregate keys and a units note. Read per-model entries through
+ * {@link getModelFlops} so the aggregate keys can't be mistaken for a model.
+ */
+export type ModelFlopsMap = {
+  unit_note?: string;
+  pipeline_per_sampled_slice?: MriPerSliceCost;
+  pipeline_total?: MriStudyCost;
+  [modelId: string]: ModelFlopsEntry | MriPerSliceCost | MriStudyCost | string | undefined;
+};
+
+/** Look up one model's compute cost, narrowing past the aggregate keys. */
+export function getModelFlops(
+  map: ModelFlopsMap | undefined,
+  modelId: string,
+): ModelFlopsEntry | undefined {
+  const entry = map?.[modelId];
+  if (entry && typeof entry === "object" && "per" in entry) {
+    return entry as ModelFlopsEntry;
+  }
+  return undefined;
+}
 
 export type XrayPredictResponse = {
   filename: string;
@@ -55,7 +121,7 @@ export type XrayPredictResponse = {
   model_count?: number;
   ensemble_display_name?: string;
   feedback?: FeedbackBundle;
-  model_flops?: Record<string, ModelFlopsEntry>;
+  model_flops?: ModelFlopsMap;
 };
 
 export type MriLabelPrediction = {
@@ -124,7 +190,7 @@ export type MriPredictResponse = {
   ground_truth_feedback?: string[];
   skm_tea_categories?: { id: number; name: string }[];
   feedback?: FeedbackBundle;
-  model_flops?: Record<string, ModelFlopsEntry>;
+  model_flops?: ModelFlopsMap;
 };
 
 export type BackboneHealth = {
@@ -137,9 +203,15 @@ export type BackboneHealth = {
   mri_sample_available?: boolean;
   mri_sample_filename?: string | null;
   model_flops?: {
-    xray_models: Record<string, { gflops: number; params_m: number }>;
-    mri_models: Record<string, { gflops: number; params_m: number; display_name: string }>;
-    total_pipeline_gflops: Record<string, number>;
+    unit_note: string;
+    xray_models: Record<string, ModelFlopsEntry & { family: string }>;
+    mri_models: Record<string, ModelFlopsEntry & { display_name: string }>;
+    totals: {
+      xray_mean_per_model: { gmacs: number; gflops: number };
+      xray_ensemble_all: { gmacs: number; gflops: number; model_count: number };
+      mri_per_sampled_slice: MriPerSliceCost;
+      mri_per_study_max: MriStudyCost;
+    };
   };
 };
 

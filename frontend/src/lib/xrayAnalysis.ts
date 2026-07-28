@@ -1,5 +1,5 @@
 import type { FeedbackBundle, XrayPredictResponse } from "@/lib/diagnosticApi";
-import { gradcamToDataUrl } from "@/lib/diagnosticApi";
+import { getModelFlops, gradcamToDataUrl } from "@/lib/diagnosticApi";
 import { getFeedbackFindings } from "@/lib/clinicalFeedback";
 
 export type WorkspaceAnalysisResult = {
@@ -22,11 +22,45 @@ export type ModelPerformanceRow = {
   gradeDisplay?: string;
   /** Override confidence column (e.g. slice count). */
   confidenceDisplay?: string;
-  /** FLOPs in GFLOPS. */
+  /** Multiply-accumulate ops (GMACs) — what model papers usually quote. */
+  gmacs?: number;
+  /** True floating-point ops (GFLOPs) = 2 x gmacs. */
   gflops?: number;
   /** Parameters in millions. */
   paramsM?: number;
+  /** MRI stages only — how many times this model runs per sampled slice. */
+  callsPerSlice?: number;
+  /** Whether the cost was measured with fvcore or taken from a published figure. */
+  costMethod?: "fvcore" | "architecture_estimate";
+  /** Set when fvcore's count was rejected as an undercount or is a lower bound. */
+  costWarning?: string;
 };
+
+/**
+ * Tooltip for a model row's compute column.
+ *
+ * Always states both unit conventions and where the figure came from, so a
+ * published estimate is never mistaken for a live measurement.
+ */
+export function formatModelCostTooltip(row: ModelPerformanceRow): string | undefined {
+  if (row.gflops == null) return undefined;
+  const parts = [
+    `${row.gflops.toFixed(2)} GFLOPs (${row.gmacs?.toFixed(2) ?? "?"} GMACs)`,
+    `${row.paramsM?.toFixed(1) ?? "?"}M params`,
+  ];
+  if (row.callsPerSlice && row.callsPerSlice > 1) {
+    parts.push(`runs ${row.callsPerSlice}x per sampled slice`);
+  }
+  if (row.costMethod) {
+    parts.push(
+      row.costMethod === "fvcore"
+        ? "measured with fvcore"
+        : "published architecture estimate",
+    );
+  }
+  const base = parts.join(" · ");
+  return row.costWarning ? `${base}\n${row.costWarning}` : base;
+}
 
 export type GradcamViewItem = {
   id: string;
@@ -48,16 +82,21 @@ export function xrayResponseToResult(data: XrayPredictResponse): WorkspaceAnalys
 }
 
 export function buildXrayModelRows(data: XrayPredictResponse): ModelPerformanceRow[] {
-  const flopsMap = data.model_flops ?? {};
-  const rows: ModelPerformanceRow[] = Object.entries(data.individual_results).map(([id, r]) => ({
-    id,
-    name: r.display_name ?? id,
-    grade: r.grade,
-    confidence: r.confidence,
-    gradcamUrl: gradcamToDataUrl(r.gradcam_base64),
-    gflops: flopsMap[id]?.gflops,
-    paramsM: flopsMap[id]?.params_m,
-  }));
+  const rows: ModelPerformanceRow[] = Object.entries(data.individual_results).map(([id, r]) => {
+    const cost = getModelFlops(data.model_flops, id);
+    return {
+      id,
+      name: r.display_name ?? id,
+      grade: r.grade,
+      confidence: r.confidence,
+      gradcamUrl: gradcamToDataUrl(r.gradcam_base64),
+      gmacs: cost?.gmacs,
+      gflops: cost?.gflops,
+      paramsM: cost?.params_m,
+      costMethod: cost?.method,
+      costWarning: cost?.measurement_warning,
+    };
+  });
   rows.push({
     id: "ensemble",
     name: data.ensemble_display_name ?? "Ensemble (probability average)",

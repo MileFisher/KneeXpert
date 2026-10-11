@@ -239,6 +239,31 @@ export type BackboneHealth = {
       mri_per_study_max: MriStudyCost;
     };
   };
+
+  /**
+   * Clinical-note layer readiness. All optional: a backend without the layer
+   * deployed simply omits them.
+   */
+  /** An on-disk vector index exists. False means `python -m rag.ingest` has not run. */
+  rag_index_ready?: boolean;
+  rag_index_path?: string;
+  /** Passages in the committed corpus. */
+  rag_chunk_count?: number;
+  /**
+   * Whether each local model is already in the HuggingFace cache. False means the
+   * first note request will stall on a download — worth checking before a demo.
+   */
+  rag_models_cached?: { embedder: boolean; nli: boolean };
+  rag_models_ready?: boolean;
+  /** The generation host answered. Probed with a short timeout and cached server-side. */
+  llm_available?: boolean;
+  /** Configured model tag, present whether or not the host is reachable. */
+  llm_model?: string;
+  /** The host is reachable AND has `llm_model` pulled. */
+  llm_model_present?: boolean;
+  llm_base_url?: string;
+  /** Why the probe failed, when it did. Null when the host answered. */
+  llm_error?: string | null;
 };
 
 function postFormWithProgress<T>(

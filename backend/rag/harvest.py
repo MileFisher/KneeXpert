@@ -22,6 +22,7 @@ import sys
 import time
 import xml.etree.ElementTree as ET
 from dataclasses import dataclass
+from pathlib import Path
 from datetime import datetime, timezone
 
 import httpx
@@ -38,11 +39,7 @@ from rag.config import (
     SEED_PMCIDS_PATH,
 )
 from rag.corpus_types import ManifestEntry
-from rag.licensing import (
-    JATS_NS,
-    LicenceNotRedistributable,
-    assert_commercial_licence,
-)
+from rag.licensing import LicenceNotRedistributable, assert_commercial_licence
 
 PMC_ARTICLE_URL = "https://www.ncbi.nlm.nih.gov/pmc/articles/{pmcid}/"
 
@@ -71,7 +68,7 @@ class _RateLimiter:
         self._last = time.monotonic()
 
 
-def read_seed_pmcids(path=SEED_PMCIDS_PATH) -> list[str]:
+def read_seed_pmcids(path: Path = SEED_PMCIDS_PATH) -> list[str]:
     """Read the committed seed list, ignoring blanks and ``#`` comments."""
     if not path.is_file():
         raise HarvestError(
@@ -240,7 +237,9 @@ def write_manifest(entries: list[ManifestEntry]) -> None:
     )
 
 
-def harvest(pmcids: list[str], dry_run: bool = False) -> tuple[list[ManifestEntry], list[str]]:
+def harvest(
+    pmcids: list[str], dry_run: bool = False
+) -> tuple[list[ManifestEntry], list[str]]:
     """Harvest every id, returning accepted entries and refusal messages."""
     limiter = _RateLimiter(per_second=NCBI_RATE_LIMIT_PER_S)
     entries: list[ManifestEntry] = []

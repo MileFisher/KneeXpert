@@ -103,14 +103,20 @@ def test_chunks_never_cross_a_section_boundary() -> None:
 
 
 def test_long_sections_split_into_multiple_chunks() -> None:
-    body = f"<sec><title>Discussion</title><p>{LONG_A}</p><p>{LONG_B}</p><p>{LONG_C}</p></sec>"
+    body = (
+        f"<sec><title>Discussion</title><p>{LONG_A}</p>"
+        f"<p>{LONG_B}</p><p>{LONG_C}</p></sec>"
+    )
     chunks = chunk_jats(_article(body), MANIFEST)
     assert len(chunks) >= 2
     assert all(c.section_path == "Discussion" for c in chunks)
 
 
 def test_chunk_ids_are_deterministic_and_unique() -> None:
-    body = f"<sec><title>Discussion</title><p>{LONG_A}</p><p>{LONG_B}</p><p>{LONG_C}</p></sec>"
+    body = (
+        f"<sec><title>Discussion</title><p>{LONG_A}</p>"
+        f"<p>{LONG_B}</p><p>{LONG_C}</p></sec>"
+    )
     first = chunk_jats(_article(body), MANIFEST)
     second = chunk_jats(_article(body), MANIFEST)
     assert [c.chunk_id for c in first] == [c.chunk_id for c in second]

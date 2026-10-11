@@ -144,7 +144,16 @@ def rag_corpus_chunk_count() -> int:
 
 
 def rag_index_ready() -> bool:
-    """True when an on-disk Qdrant index exists with at least one point."""
+    """True when an on-disk Qdrant index holds at least one built collection.
+
+    Deliberately does not open the store: ``/health`` must stay cheap, and
+    Qdrant's local mode takes a single-process lock that a health check has no
+    business competing for.
+
+    Checks for a collection *directory* rather than for any file, because a failed
+    or interrupted ingest leaves a bare ``.lock`` behind and that must not read as
+    a usable index.
+    """
     if not INDEX_DIR.is_dir():
         return False
-    return any(INDEX_DIR.iterdir())
+    return any(child.is_dir() for child in INDEX_DIR.iterdir())

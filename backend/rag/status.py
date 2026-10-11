@@ -69,7 +69,8 @@ async def probe_llm(force: bool = False) -> dict[str, Any]:
     """
     now = time.monotonic()
     cached = _probe_cache["value"]
-    if not force and cached is not None and now - _probe_cache["at"] < LLM_PROBE_CACHE_TTL_S:
+    fresh = now - _probe_cache["at"] < LLM_PROBE_CACHE_TTL_S
+    if not force and cached is not None and fresh:
         return dict(cached)
 
     result: dict[str, Any] = {

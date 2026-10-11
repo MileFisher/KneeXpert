@@ -79,7 +79,8 @@ NO_LICENCE_URL = _article(
     """<permissions>
         <copyright-statement>(c) 2021 The Authors</copyright-statement>
         <license>
-          <license-p>Readers may use this article as long as it is properly cited.</license-p>
+          <license-p>Readers may use this article as long as it is
+          properly cited.</license-p>
         </license>
       </permissions>"""
 )
@@ -111,7 +112,9 @@ NO_PERMISSIONS_AT_ALL = _article("")
     ],
 )
 def test_accepts_commercial_use_licences(
-    xml: bytes, expected_ref: str, expected_source: str
+    xml: bytes,
+    expected_ref: str,
+    expected_source: str,
 ) -> None:
     assertion = assert_commercial_licence("PMC1", xml)
     assert assertion.licence_ref == expected_ref
@@ -129,7 +132,9 @@ def test_http_and_https_spellings_are_equivalent() -> None:
 
 
 def test_refuses_non_commercial() -> None:
-    with pytest.raises(LicenceNotRedistributable, match="not on the commercial-use"):
+    with pytest.raises(
+        LicenceNotRedistributable, match="not on the redistribution allowlist"
+    ):
         assert_commercial_licence("PMC2", CC_BY_NC)
 
 
@@ -160,7 +165,9 @@ def test_refuses_when_oa_bucket_contradicts_the_xml() -> None:
     A CC BY licence_ref paired with an OA bucket of "CC BY-NC" means one of the
     two is wrong. Refusing is the only safe resolution.
     """
-    with pytest.raises(LicenceNotRedistributable, match="not commercial-use-allowed"):
+    with pytest.raises(
+        LicenceNotRedistributable, match="not on the redistribution allowlist"
+    ):
         assert_commercial_licence("PMC7", LICENSE_REF_CC_BY_4, oa_bucket="CC BY-NC")
 
 

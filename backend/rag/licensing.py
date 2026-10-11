@@ -28,11 +28,15 @@ JATS_NS = {
     "xlink": "http://www.w3.org/1999/xlink",
 }
 
-# PMC's own bucket labels for the commercial-use-allowed set. The OA service
-# reports these on the <record license="..."> attribute.
-ALLOWED_OA_BUCKETS: frozenset[str] = frozenset(
-    {"cc0", "cc by", "cc by-sa", "cc by-nd"}
-)
+# PMC bucket labels we accept, reported on the OA service's <record license="...">
+# attribute. This MUST encode the same policy as config.ALLOWED_LICENCE_REFS, or
+# the two signals that are supposed to cross-check each other would disagree and
+# the stricter-wins rule would be meaningless.
+#
+# Note this is narrower than PMC's own "Commercial Use Allowed" bucket, which also
+# contains CC BY-ND. ND is excluded deliberately: the corpus is redistributed as
+# chunked excerpts with context headers prepended, which is a derivative work.
+ALLOWED_OA_BUCKETS: frozenset[str] = frozenset({"cc0", "cc by", "cc by-sa"})
 
 
 class LicenceNotRedistributable(RuntimeError):
@@ -41,6 +45,19 @@ class LicenceNotRedistributable(RuntimeError):
     This is deliberately a hard failure. A corpus that silently drops an article
     is indistinguishable from one that silently includes a copyrighted one.
     """
+
+
+@dataclass(frozen=True)
+class LicenceDeclaration:
+    """One licence URL as found in an article, with the construct that carried it."""
+
+    raw: str
+    source: str
+    """"ali:license_ref" or "xlink:href"."""
+
+    @property
+    def normalised(self) -> str:
+        return normalise_licence_ref(self.raw)
 
 
 @dataclass(frozen=True)
@@ -76,46 +93,40 @@ _ALLOWED_NORMALISED: frozenset[str] = frozenset(
 )
 
 
-def extract_licence_refs(xml_bytes: bytes) -> list[str]:
+def extract_licence_declarations(xml_bytes: bytes) -> list[LicenceDeclaration]:
     """Collect every licence URL declared in a JATS article's front matter.
 
     Looks only under ``front/article-meta/permissions`` — a licence URL appearing
     anywhere else in the document (a reference, a figure caption) is not a
     statement about this article and must not be trusted as one.
 
-    Returns an empty list when no licence URL is present. Order is document order,
-    ``ali:license_ref`` elements before ``xlink:href`` attributes.
+    Each declaration records which construct carried it, so the caller does not
+    have to re-parse the document to find out. Returns an empty list when no
+    licence URL is present. Order is document order, ``ali:license_ref`` elements
+    before ``xlink:href`` attributes.
     """
     try:
         root = ET.fromstring(xml_bytes)
     except ET.ParseError as e:
         raise LicenceNotRedistributable(f"Article XML is not parseable: {e}") from e
 
-    refs: list[str] = []
+    declarations: list[LicenceDeclaration] = []
     for permissions in root.iterfind("./front/article-meta/permissions"):
         for licence in permissions.iterfind("./license"):
             for node in licence.iterfind("./ali:license_ref", JATS_NS):
                 if node.text and node.text.strip():
-                    refs.append(node.text.strip())
+                    declarations.append(
+                        LicenceDeclaration(node.text.strip(), "ali:license_ref")
+                    )
             href = licence.get(f"{{{JATS_NS['xlink']}}}href")
             if href and href.strip():
-                refs.append(href.strip())
-    return refs
+                declarations.append(LicenceDeclaration(href.strip(), "xlink:href"))
+    return declarations
 
 
-def _licence_ref_source(xml_bytes: bytes, chosen: str) -> str:
-    """Report which JATS construct supplied the accepted ref (for the manifest)."""
-    try:
-        root = ET.fromstring(xml_bytes)
-    except ET.ParseError:
-        return "unknown"
-    target = normalise_licence_ref(chosen)
-    for permissions in root.iterfind("./front/article-meta/permissions"):
-        for licence in permissions.iterfind("./license"):
-            for node in licence.iterfind("./ali:license_ref", JATS_NS):
-                if node.text and normalise_licence_ref(node.text) == target:
-                    return "ali:license_ref"
-    return "xlink:href"
+def extract_licence_refs(xml_bytes: bytes) -> list[str]:
+    """Licence URLs from front matter, without their source labels."""
+    return [d.raw for d in extract_licence_declarations(xml_bytes)]
 
 
 def normalise_oa_bucket(raw: str | None) -> str | None:
@@ -147,38 +158,47 @@ def assert_commercial_licence(
             URL, declares one outside the commercial-use allowlist, or disagrees
             with the OA service bucket.
     """
-    refs = extract_licence_refs(xml_bytes)
-    if not refs:
+    declarations = extract_licence_declarations(xml_bytes)
+    if not declarations:
         raise LicenceNotRedistributable(
             f"{pmcid}: no licence URL in front/article-meta/permissions. "
             "PMC articles without a machine-readable licence are excluded — a "
             "human-readable licence-p paragraph is not sufficient."
         )
 
-    normalised = [normalise_licence_ref(ref) for ref in refs]
-    accepted = [
-        original
-        for original, norm in zip(refs, normalised, strict=True)
-        if norm in _ALLOWED_NORMALISED
-    ]
+    accepted = [d for d in declarations if d.normalised in _ALLOWED_NORMALISED]
+    rejected = [d for d in declarations if d.normalised not in _ALLOWED_NORMALISED]
+
     if not accepted:
+        found = [d.raw for d in declarations]
         raise LicenceNotRedistributable(
-            f"{pmcid}: licence {refs!r} is not on the commercial-use allowlist. "
-            "Only CC0 and CC BY / BY-SA are accepted; NC and ND variants are "
-            "excluded because the corpus is committed to a public repository."
+            f"{pmcid}: licence {found!r} is not on the redistribution allowlist. "
+            "Only CC0 and CC BY / BY-SA are accepted. NC is excluded because the "
+            "corpus is committed to a public repository, and ND because chunked "
+            "excerpts with prepended context headers are a derivative work."
+        )
+
+    # An article declaring both an allowed and a disallowed licence is ambiguous
+    # about which governs its text. Stricter-wins means refusing, not picking the
+    # convenient one.
+    if rejected:
+        raise LicenceNotRedistributable(
+            f"{pmcid}: conflicting licence declarations in permissions — "
+            f"{[d.raw for d in accepted]!r} is allowed but "
+            f"{[d.raw for d in rejected]!r} is not. Refusing rather than choosing "
+            "which one governs."
         )
 
     bucket = normalise_oa_bucket(oa_bucket)
     if bucket is not None and bucket not in ALLOWED_OA_BUCKETS:
         raise LicenceNotRedistributable(
             f"{pmcid}: PMC OA service reports licence bucket {oa_bucket!r}, which "
-            f"is not commercial-use-allowed, even though the article XML declares "
-            f"{accepted[0]!r}. Refusing on the stricter of the two signals."
+            f"is not on the redistribution allowlist, even though the article XML "
+            f"declares {accepted[0].raw!r}. Refusing on the stricter of the two "
+            "signals."
         )
 
     chosen = accepted[0]
     return LicenceAssertion(
-        licence_ref=normalise_licence_ref(chosen),
-        oa_bucket=bucket,
-        source=_licence_ref_source(xml_bytes, chosen),
+        licence_ref=chosen.normalised, oa_bucket=bucket, source=chosen.source
     )

@@ -84,6 +84,28 @@ _MD_EMPHASIS = re.compile(r"(?<!\w)([*_])(?!\s)(.+?)(?<!\s)\1(?!\w)", re.S)
 _MD_CODE = re.compile(r"`([^`]*)`")
 
 
+def context_header(title: str, section_path: str) -> str:
+    """The prefix every chunk carries, naming its article and section.
+
+    Defined once: the format is also parsed back off a chunk when displaying a
+    retrieved passage, so the two must not drift.
+    """
+    return f"{title} — {section_path}: " if section_path else f"{title}: "
+
+
+def strip_context_header(text: str) -> str:
+    """Recover a chunk's body, tolerating titles that themselves contain ": "."""
+    marker = ": "
+    idx = text.find(" — ")
+    if idx != -1:
+        after = text[idx + 3 :]
+        pos = after.find(marker)
+        if pos != -1:
+            return after[pos + len(marker) :]
+    pos = text.find(marker)
+    return text[pos + len(marker) :] if pos != -1 else text
+
+
 def section_is_dropped(title: str) -> bool:
     """True when a section title marks administrative rather than clinical content.
 
@@ -144,9 +166,13 @@ def _element_text(node: ET.Element) -> str:
     return "".join(parts)
 
 
-def _is_quality_chunk(text: str) -> bool:
-    """Reject table debris, statistics dumps and fragments too short to stand alone."""
-    body = text.split(": ", 1)[-1] if ": " in text else text
+def _is_quality_chunk(body: str) -> bool:
+    """Reject table debris, statistics dumps and fragments too short to stand alone.
+
+    Takes the chunk body *without* its context header. The header is article
+    metadata, not content, so including it would let a long title carry a
+    too-short passage past the minimum-length filter.
+    """
     if len(body) < CHUNK_MIN_CHARS:
         return False
     stripped = body.replace(" ", "")
@@ -175,24 +201,32 @@ def _paragraphs_of_section(sec: ET.Element) -> list[str]:
 
 
 def _pack(blocks: list[str]) -> list[str]:
-    """Pack paragraphs up to the target size, splitting any that exceed the ceiling.
+    """Pack paragraphs up to the target size, overlapping by one paragraph.
 
     Packing stops at the section boundary by construction: this only ever sees one
     section's blocks.
+
+    Consecutive chunks share their boundary paragraph, so a passage whose meaning
+    straddles a boundary stays retrievable from either side. The cost is some
+    duplicated text in the index, which is harmless both as a retrieval target and
+    as an entailment premise.
     """
-    packed: list[str] = []
-    current = ""
+    pieces: list[str] = []
     for block in blocks:
-        for piece in _split_oversized(block):
-            if not current:
-                current = piece
-            elif len(current) + 1 + len(piece) <= CHUNK_TARGET_CHARS:
-                current = f"{current} {piece}"
-            else:
-                packed.append(current)
-                current = piece
+        pieces.extend(_split_oversized(block))
+
+    packed: list[str] = []
+    current: list[str] = []
+    for piece in pieces:
+        candidate = current + [piece]
+        if current and len(" ".join(candidate)) > CHUNK_TARGET_CHARS:
+            packed.append(" ".join(current))
+            # Carry the last paragraph forward as the overlap.
+            current = [current[-1], piece] if len(current) > 1 else [piece]
+        else:
+            current = candidate
     if current:
-        packed.append(current)
+        packed.append(" ".join(current))
     return packed
 
 
@@ -217,11 +251,16 @@ def _split_oversized(block: str) -> list[str]:
 
 
 def _walk_sections(
-    node: ET.Element, trail: tuple[str, ...]
+    node: ET.Element, trail: tuple[str, ...], default_title: str = ""
 ) -> list[tuple[str, list[str]]]:
-    """Depth-first walk yielding ``(section_path, paragraphs)`` in document order."""
+    """Depth-first walk yielding ``(section_path, paragraphs)`` in document order.
+
+    ``default_title`` names the node when it carries no ``<title>`` of its own —
+    an abstract, for instance, which is titled by its element rather than by a
+    child.
+    """
     collected: list[tuple[str, list[str]]] = []
-    own_title = ""
+    own_title = default_title
     for child in node:
         if _localname(child.tag) == "title":
             own_title = normalise_text(_element_text(child))
@@ -267,11 +306,10 @@ def chunk_jats(xml_bytes: bytes, manifest: ManifestEntry) -> list[Chunk]:
 
     sections: list[tuple[str, list[str]]] = []
     for abstract in root.iterfind("./front/article-meta/abstract"):
-        paragraphs = _paragraphs_of_section(abstract)
-        nested = _walk_sections(abstract, ("Abstract",))
-        if paragraphs:
-            sections.append(("Abstract", paragraphs))
-        sections.extend(nested)
+        # _walk_sections already emits this node's own paragraphs before
+        # recursing, so collecting them separately would duplicate every
+        # unstructured abstract.
+        sections.extend(_walk_sections(abstract, (), default_title="Abstract"))
 
     for body in root.iterfind("./body"):
         direct = _paragraphs_of_section(body)
@@ -284,12 +322,11 @@ def chunk_jats(xml_bytes: bytes, manifest: ManifestEntry) -> list[Chunk]:
     chunks: list[Chunk] = []
     for sec_index, (section_path, paragraphs) in enumerate(sections):
         for chunk_index, packed in enumerate(_pack(paragraphs)):
-            header = f"{title} — {section_path}: " if section_path else f"{title}: "
-            text = header + packed
+            if not _is_quality_chunk(packed):
+                continue
+            text = context_header(title, section_path) + packed
             if len(text) > CHUNK_MAX_CHARS:
                 text = text[:CHUNK_MAX_CHARS].rsplit(" ", 1)[0]
-            if not _is_quality_chunk(text):
-                continue
             chunks.append(
                 Chunk(
                     chunk_id=f"{manifest.pmcid}#{sec_index:02d}-{chunk_index:02d}",
@@ -346,10 +383,9 @@ def chunk_markdown(path: Path, licence: str = "internal") -> list[Chunk]:
     chunks: list[Chunk] = []
     for sec_index, (heading, paragraphs) in enumerate(sections):
         for chunk_index, packed in enumerate(_pack(paragraphs)):
-            header = f"{doc_title} — {heading}: " if heading else f"{doc_title}: "
-            text = header + packed
-            if not _is_quality_chunk(text):
+            if not _is_quality_chunk(packed):
                 continue
+            text = context_header(doc_title, heading) + packed
             chunks.append(
                 Chunk(
                     chunk_id=f"{stem}#{sec_index:02d}-{chunk_index:02d}",

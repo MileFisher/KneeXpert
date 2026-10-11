@@ -17,6 +17,7 @@ from mri.pipeline import mri_models_available, predict_mri
 from xray import DEFAULT_ENSEMBLE_MODELS, MODELS_CONFIG, ModelLoader, all_available_model_ids
 from feedback_engine import generate_feedback
 from model_profiler import get_all_flops, get_model_flops_for_response
+from rag.status import rag_health
 
 app = FastAPI(title="KneeXpert Backbone API", version="1.0.0")
 
@@ -58,6 +59,9 @@ async def health_check():
         "mri_sample_filename": SAMPLE_MRI_PATH.name if SAMPLE_MRI_PATH.is_file() else None,
         "mri_label_summary_available": LABEL_SUMMARY_PATH.is_file(),
         "model_flops": flops_data,
+        # Clinical-note layer. The LLM probe is async with a short timeout and a
+        # TTL cache so a powered-off generation host cannot stall this endpoint.
+        **await rag_health(),
     }
 
 

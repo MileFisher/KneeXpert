@@ -15,3 +15,16 @@ monai>=1.3.0
 einops>=0.6.0
 timm>=0.9.0
 fvcore>=0.1.5
+
+# ── RAG + MEDITRON clinical-note layer ────────────────────────────────────────
+# Generation runs on a remote Ollama host (OLLAMA_BASE_URL); retrieval and the
+# NLI safety gate run in-process so they survive the LLM being unreachable.
+httpx>=0.27.0
+python-dotenv>=1.0.0
+qdrant-client>=1.9.0,<2.0
+sentence-transformers>=3.0.0,<6.0
+transformers>=4.40.0,<5.0
+# Required by the DeBERTa-v3 tokenizer. MNLI gate loading fails at FIRST REQUEST,
+# not at import, if these are missing -- same lazy-failure class as einops above.
+sentencepiece>=0.2.0
+protobuf>=4.25.0

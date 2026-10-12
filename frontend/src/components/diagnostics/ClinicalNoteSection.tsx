@@ -2,6 +2,7 @@ import { useCallback, useMemo } from "react";
 import { toast } from "sonner";
 
 import { ClinicalNotePanel } from "./ClinicalNotePanel";
+import type { ClinicalNoteViewState } from "./ClinicalNotePanel";
 import { useClinicalNote } from "@/hooks/useClinicalNote";
 import { usePatients } from "@/context/PatientContext";
 import type { Modality, Patient, SignedClinicalNote } from "@/data/patients";
@@ -54,12 +55,40 @@ export function ClinicalNoteSection({
         age: patient.age,
         gender: patient.gender,
         bmi: patient.bmi,
+        pain_level: patient.painLevel,
+        history: patient.history,
+        symptoms: patient.symptoms,
       },
     };
-  }, [modality, grade, confidence, mriData, patient.age, patient.gender, patient.bmi]);
+  }, [
+    modality,
+    grade,
+    confidence,
+    mriData,
+    patient.age,
+    patient.gender,
+    patient.bmi,
+    patient.painLevel,
+    patient.history,
+    patient.symptoms,
+  ]);
 
-  const query = useClinicalNote(request);
+  const query = useClinicalNote(patient.id, request);
   const response = query.data ?? null;
+
+  const viewState: ClinicalNoteViewState = query.isPending
+    ? { kind: "loading" }
+    : query.isError
+      ? { kind: "error", error: query.error }
+      : query.data
+        ? { kind: "ready", response: query.data }
+        : { kind: "loading" };
+
+  // Stamped when the note arrives, so sign-off does not overwrite it.
+  const generatedAt = useMemo(
+    () => (query.data ? new Date().toISOString() : null),
+    [query.data],
+  );
 
   const existing = useMemo(
     () => patient.report?.clinicalNotes?.find(note => note.modality === modality),
@@ -85,20 +114,20 @@ export function ClinicalNoteSection({
           source: passage.source,
           url: passage.url ?? null,
         })),
-        generatedAt: new Date().toISOString(),
+        // When the model produced it, not when it was signed off: conflating
+        // the two would misreport how old the advice is.
+        generatedAt: generatedAt ?? new Date().toISOString(),
         reviewedBy: clinicianName,
         reviewedAt: new Date().toISOString(),
         ...extra,
       });
     },
-    [response, patient.id, modality, signOffClinicalNote, clinicianName],
+    [response, generatedAt, patient.id, modality, signOffClinicalNote, clinicianName],
   );
 
   return (
     <ClinicalNotePanel
-      state={query.isPending ? "loading" : query.isError ? "error" : "ready"}
-      response={response}
-      error={query.error as Error | null}
+      state={viewState}
       status={existing?.status ?? null}
       reviewedText={existing?.reviewedText}
       onAccept={() => {

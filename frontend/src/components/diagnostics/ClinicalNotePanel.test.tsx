@@ -46,9 +46,7 @@ function renderPanel(props: Partial<Parameters<typeof ClinicalNotePanel>[0]> = {
   };
   render(
     <ClinicalNotePanel
-      state="ready"
-      response={WITH_NOTE}
-      error={null}
+      state={{ kind: "ready", response: WITH_NOTE }}
       status={null}
       {...handlers}
       {...props}
@@ -59,7 +57,7 @@ function renderPanel(props: Partial<Parameters<typeof ClinicalNotePanel>[0]> = {
 
 describe("ClinicalNotePanel", () => {
   it("shows a skeleton while generating", () => {
-    renderPanel({ state: "loading", response: null });
+    renderPanel({ state: { kind: "loading" } });
     expect(screen.getByTestId("clinical-note-loading")).toBeInTheDocument();
     expect(screen.queryByTestId("clinical-note-body")).not.toBeInTheDocument();
   });
@@ -95,7 +93,7 @@ describe("ClinicalNotePanel", () => {
     };
 
     it("states that it is unavailable and why", () => {
-      renderPanel({ response: rejected });
+      renderPanel({ state: { kind: "ready", response: rejected } });
       expect(screen.getByTestId("clinical-note-unavailable")).toBeInTheDocument();
       expect(screen.getByText(/could not be grounded/i)).toBeInTheDocument();
       expect(screen.getByText(/3 attempts/)).toBeInTheDocument();
@@ -105,7 +103,7 @@ describe("ClinicalNotePanel", () => {
     // separately and always, so if its text ever appeared here a clinician could
     // not tell dictionary output from model reasoning.
     it("never substitutes deterministic feedback text", () => {
-      renderPanel({ response: rejected });
+      renderPanel({ state: { kind: "ready", response: rejected } });
       for (const finding of XRAY_FINDINGS_BY_GRADE[3] ?? []) {
         expect(screen.queryByText(finding)).not.toBeInTheDocument();
       }
@@ -113,12 +111,17 @@ describe("ClinicalNotePanel", () => {
     });
 
     it("offers no sign-off actions, since there is nothing to sign off", () => {
-      renderPanel({ response: rejected });
+      renderPanel({ state: { kind: "ready", response: rejected } });
       expect(screen.queryByRole("button", { name: /Accept/ })).not.toBeInTheDocument();
     });
 
     it("distinguishes an unreachable model from a failed gate", () => {
-      renderPanel({ response: { ...BASE, fallback_reason: "llm_unavailable" } });
+      renderPanel({
+        state: {
+          kind: "ready",
+          response: { ...BASE, fallback_reason: "llm_unavailable" },
+        },
+      });
       expect(screen.getByText(/not reachable/i)).toBeInTheDocument();
     });
   });
@@ -130,10 +133,24 @@ describe("ClinicalNotePanel", () => {
       expect(handlers.onAccept).toHaveBeenCalledOnce();
     });
 
-    it("rejects a note with a reason", () => {
+    it("requires a reason before rejecting", () => {
       const handlers = renderPanel();
-      fireEvent.click(screen.getByRole("button", { name: /Reject/ }));
-      expect(handlers.onReject).toHaveBeenCalledWith(expect.any(String));
+      fireEvent.click(screen.getByRole("button", { name: /^Reject/ }));
+      const confirm = screen.getByRole("button", { name: /Confirm rejection/ });
+      expect(confirm).toBeDisabled();
+      expect(handlers.onReject).not.toHaveBeenCalled();
+    });
+
+    it("passes the clinician's own reason when rejecting", () => {
+      const handlers = renderPanel();
+      fireEvent.click(screen.getByRole("button", { name: /^Reject/ }));
+      fireEvent.change(screen.getByLabelText("Reason for rejecting the note"), {
+        target: { value: "Overstates the cartilage finding." },
+      });
+      fireEvent.click(screen.getByRole("button", { name: /Confirm rejection/ }));
+      expect(handlers.onReject).toHaveBeenCalledWith(
+        "Overstates the cartilage finding.",
+      );
     });
 
     it("sends the edited text, not the original, when edited", () => {
@@ -151,12 +168,21 @@ describe("ClinicalNotePanel", () => {
       expect(screen.queryByRole("button", { name: /Accept/ })).not.toBeInTheDocument();
     });
 
-    it("shows the clinician's wording after an edit", () => {
+    it("shows the clinician's wording as the note body after an edit", () => {
       renderPanel({ status: "edited", reviewedText: "Revised by clinician." });
       expect(screen.getByText("Revised by clinician.")).toBeInTheDocument();
+    });
+
+    // "Reviewed by" is only meaningful if what was changed can be seen, so the
+    // model's original wording stays available beside the approved version.
+    it("keeps the model's original wording available after an edit", () => {
+      renderPanel({ status: "edited", reviewedText: "Revised by clinician." });
       expect(
-        screen.queryByText(/Grade 3 change with medial narrowing/),
-      ).not.toBeInTheDocument();
+        screen.getByText("Show the model's original wording"),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByText(/Grade 3 change with medial narrowing/),
+      ).toBeInTheDocument();
     });
 
     it("can request a regeneration", () => {
@@ -168,9 +194,7 @@ describe("ClinicalNotePanel", () => {
 
   it("surfaces a transport error", () => {
     renderPanel({
-      state: "error",
-      response: null,
-      error: new Error("Retrieval index is empty."),
+      state: { kind: "error", error: new Error("Retrieval index is empty.") },
     });
     expect(screen.getByText(/Retrieval index is empty/)).toBeInTheDocument();
   });

@@ -81,6 +81,8 @@ export function generateReportPDF(patient: Patient): jsPDF {
   y += doc.getTextDimensions(patient.symptoms, { maxWidth: contentWidth }).h + 8;
 
   // AI Diagnostic Summary
+  const report = patient.report;
+
   doc.setFillColor(240, 245, 255);
   doc.setDrawColor(100, 140, 220);
   const diagBoxH = 28;
@@ -111,7 +113,6 @@ export function generateReportPDF(patient: Patient): jsPDF {
   }
   y += diagBoxH + 6;
 
-  const report = patient.report;
   if (report?.diagnosisSummary) {
     doc.setFontSize(9);
     doc.setFont("helvetica", "normal");

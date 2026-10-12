@@ -7,6 +7,7 @@ import {
   type Patient,
   type PatientReport,
   type ReportModelSnapshot,
+  type SignedClinicalNote,
 } from "@/data/patients";
 import { loadPatients, savePatients } from "@/lib/patientStorage";
 
@@ -30,7 +31,6 @@ export type ConfirmDiagnosisPayload = {
 
 export type ApplyAnalysisPayload = Omit<
   ConfirmDiagnosisPayload,
-  SignedClinicalNote,
   "doctorOverride" | "overrideNotes"
 > & {
   modalitySnapshots?: ModalityReportSnapshot[];

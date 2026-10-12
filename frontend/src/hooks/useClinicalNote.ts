@@ -25,9 +25,21 @@ function labelsKey(req: ClinicalNoteRequest | null): string {
     .join("|");
 }
 
-export function clinicalNoteQueryKey(req: ClinicalNoteRequest | null) {
+/**
+ * Cache key for one patient's note.
+ *
+ * `patientId` is part of the key, not an afterthought: with `staleTime:
+ * Infinity`, two patients who happen to share a modality, grade and confidence
+ * would otherwise be served the same cached note — and the request carries
+ * patient context, so the notes genuinely differ.
+ */
+export function clinicalNoteQueryKey(
+  patientId: string | null,
+  req: ClinicalNoteRequest | null,
+) {
   return [
     "clinical-note",
+    patientId,
     req?.modality ?? null,
     req?.grade ?? null,
     req?.confidence ?? null,
@@ -37,13 +49,14 @@ export function clinicalNoteQueryKey(req: ClinicalNoteRequest | null) {
 }
 
 export function useClinicalNote(
+  patientId: string | null,
   req: ClinicalNoteRequest | null,
   enabled = true,
 ) {
   return useQuery<ClinicalNoteResponse>({
-    queryKey: clinicalNoteQueryKey(req),
+    queryKey: clinicalNoteQueryKey(patientId, req),
     queryFn: ({ signal }) => generateClinicalNote(req!, signal),
-    enabled: enabled && req !== null,
+    enabled: enabled && req !== null && patientId !== null,
     // The backend already retries internally, escalating temperature and
     // widening retrieval. Retrying here would re-run that whole budget and
     // double the cost of metered inference for no new information.

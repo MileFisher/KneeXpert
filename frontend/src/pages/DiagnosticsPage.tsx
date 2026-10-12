@@ -3517,15 +3517,13 @@ function DiagnosticWorkspace({
 
               {/* RAG-grounded note, held apart from the deterministic
                   interpretation above and gated on physician sign-off. */}
-              {(activeModality === "xray" || activeModality === "mri") && (
-                <ClinicalNoteSection
-                  patient={patient}
-                  modality={activeModality}
-                  grade={result.grade}
-                  confidence={result.confidence}
-                  mriData={activeModality === "mri" ? mriApiData : null}
-                />
-              )}
+              <ClinicalNoteSection
+                patient={patient}
+                modality={activeModality}
+                grade={result.grade}
+                confidence={result.confidence}
+                mriData={mriApiData}
+              />
 
               {/* Actions */}
               <div className="flex items-center justify-between flex-wrap gap-3">

@@ -134,6 +134,16 @@ NCBI_OA_SERVICE = "https://www.ncbi.nlm.nih.gov/pmc/utils/oa/oa.fcgi"
 NCBI_TOOL = os.getenv("NCBI_TOOL", "KneeXpert-RAG")
 NCBI_EMAIL = os.getenv("NCBI_EMAIL") or None
 
+# Europe PMC (EMBL-EBI) is an official PMC partner serving the same JATS full
+# text. It is the primary fetch source because it has no API-key tiering and no
+# IP-block regime: an NCBI block, once earned, is not lifted merely by starting
+# to send a contact address, so a single throttling mistake can stall the corpus
+# for hours. NCBI remains the fallback.
+EUROPE_PMC_BASE = "https://www.ebi.ac.uk/europepmc/webservices/rest"
+EUROPE_PMC_RATE_LIMIT_PER_S = 5.0
+HARVEST_SOURCE = os.getenv("HARVEST_SOURCE", "europepmc")
+"""\"europepmc\" (default), \"ncbi\", or \"auto\" to try Europe PMC then NCBI."""
+
 
 # ── Readiness probes (mirrors mri.pipeline.mri_models_available) ──────────────
 

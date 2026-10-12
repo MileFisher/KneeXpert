@@ -29,6 +29,9 @@ import httpx
 
 from rag.config import (
     ARTICLES_DIR,
+    EUROPE_PMC_BASE,
+    EUROPE_PMC_RATE_LIMIT_PER_S,
+    HARVEST_SOURCE,
     MANIFEST_PATH,
     NCBI_API_KEY,
     NCBI_EMAIL,
@@ -109,6 +112,53 @@ def _check_not_throttled(response: httpx.Response, pmcid: str) -> None:
             "ideally NCBI_API_KEY) in backend/.env, then wait a few minutes "
             "before retrying — an existing block expires on its own."
         )
+
+
+def fetch_epmc_jats(
+    client: httpx.Client, limiter: _RateLimiter, pmcid: str
+) -> bytes:
+    """Fetch one article's JATS full text from Europe PMC."""
+    limiter.wait()
+    try:
+        response = client.get(f"{EUROPE_PMC_BASE}/{pmcid}/fullTextXML")
+        response.raise_for_status()
+    except httpx.HTTPError as e:
+        raise HarvestError(f"{pmcid}: Europe PMC fetch failed: {e}") from e
+    if b"<article" not in response.content:
+        raise HarvestError(
+            f"{pmcid}: Europe PMC returned no <article> element. The id may not "
+            "have open-access full text."
+        )
+    return response.content
+
+
+def fetch_epmc_bucket(
+    client: httpx.Client, limiter: _RateLimiter, pmcid: str
+) -> str | None:
+    """Europe PMC's reported licence label, used as the cross-check signal.
+
+    Advisory, like NCBI's bucket: absent leaves the article's own JATS licence as
+    the single signal, while a *contradicting* value causes a refusal downstream.
+    """
+    limiter.wait()
+    try:
+        response = client.get(
+            f"{EUROPE_PMC_BASE}/search",
+            params={
+                "query": f"PMCID:{pmcid}",
+                "format": "json",
+                "resultType": "core",
+                "pageSize": "1",
+            },
+        )
+        response.raise_for_status()
+        results = response.json().get("resultList", {}).get("result", [])
+    except (httpx.HTTPError, ValueError):
+        return None
+    if not results:
+        return None
+    licence = results[0].get("license")
+    return str(licence) if licence else None
 
 
 def fetch_oa_bucket(
@@ -204,8 +254,18 @@ def harvest_one(
         LicenceNotRedistributable: the article may not be redistributed.
         HarvestError: the fetch itself failed.
     """
-    bucket = fetch_oa_bucket(client, limiter, pmcid)
-    xml_bytes = fetch_jats(client, limiter, pmcid)
+    if HARVEST_SOURCE == "ncbi":
+        bucket = fetch_oa_bucket(client, limiter, pmcid)
+        xml_bytes = fetch_jats(client, limiter, pmcid)
+    else:
+        try:
+            bucket = fetch_epmc_bucket(client, limiter, pmcid)
+            xml_bytes = fetch_epmc_jats(client, limiter, pmcid)
+        except HarvestError:
+            if HARVEST_SOURCE != "auto":
+                raise
+            bucket = fetch_oa_bucket(client, limiter, pmcid)
+            xml_bytes = fetch_jats(client, limiter, pmcid)
 
     assertion = assert_commercial_licence(pmcid, xml_bytes, oa_bucket=bucket)
     meta = extract_metadata(xml_bytes)
@@ -241,7 +301,11 @@ def harvest(
     pmcids: list[str], dry_run: bool = False
 ) -> tuple[list[ManifestEntry], list[str]]:
     """Harvest every id, returning accepted entries and refusal messages."""
-    limiter = _RateLimiter(per_second=NCBI_RATE_LIMIT_PER_S)
+    limiter = _RateLimiter(
+        per_second=NCBI_RATE_LIMIT_PER_S
+        if HARVEST_SOURCE == "ncbi"
+        else EUROPE_PMC_RATE_LIMIT_PER_S
+    )
     entries: list[ManifestEntry] = []
     refusals: list[str] = []
 
@@ -279,18 +343,29 @@ def main(argv: list[str] | None = None) -> int:
         help="verify licences without writing articles or the manifest",
     )
     parser.add_argument(
+        "--source",
+        choices=["europepmc", "ncbi", "auto"],
+        help="override HARVEST_SOURCE for this run",
+    )
+    parser.add_argument(
         "--ids",
         nargs="*",
         help="harvest these PMC ids instead of the committed seed list",
     )
     args = parser.parse_args(argv)
 
+    if args.source:
+        globals()["HARVEST_SOURCE"] = args.source
+
     pmcids = args.ids if args.ids else read_seed_pmcids()
-    key_state = "with API key" if NCBI_API_KEY else "no API key"
-    print(
-        f"Harvesting {len(pmcids)} article(s) at "
-        f"{NCBI_RATE_LIMIT_PER_S:g} req/s ({key_state})"
-    )
+    if HARVEST_SOURCE == "ncbi":
+        key_state = "with API key" if NCBI_API_KEY else "no API key"
+        where = f"NCBI at {NCBI_RATE_LIMIT_PER_S:g} req/s ({key_state})"
+    else:
+        where = f"Europe PMC at {EUROPE_PMC_RATE_LIMIT_PER_S:g} req/s"
+        if HARVEST_SOURCE == "auto":
+            where += ", falling back to NCBI"
+    print(f"Harvesting {len(pmcids)} article(s) from {where}")
 
     entries, refusals = harvest(pmcids, dry_run=args.dry_run)
 

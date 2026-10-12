@@ -14,6 +14,7 @@ from __future__ import annotations
 import argparse
 import sys
 
+from rag.chunker import strip_context_header
 from rag.config import TOP_K
 
 DEFAULT_QUERIES: tuple[str, ...] = (
@@ -58,7 +59,9 @@ def main(argv: list[str] | None = None) -> int:
                 print("  (no hits)")
                 continue
             for rank, hit in enumerate(hits, start=1):
-                body = hit.text.split(": ", 1)[-1]
+                # Not a naive split on the first ": " — article titles
+                # routinely contain one.
+                body = strip_context_header(hit.text)
                 print(
                     f"  {rank}. {hit.score:.3f}  [{hit.source_type}]  "
                     f"{hit.source[:70]}"

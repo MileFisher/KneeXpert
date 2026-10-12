@@ -223,3 +223,53 @@ def test_normalise_licence_ref(raw: str, expected: str) -> None:
 )
 def test_normalise_oa_bucket(raw: str | None, expected: str | None) -> None:
     assert normalise_oa_bucket(raw) == expected
+
+
+# ── Publisher conventions for where the licence URL lives ─────────────────────
+# Discovered from real articles: MDPI and Springer Nature put the licence URL in
+# an <ext-link> inside <license-p> rather than on <license> itself. Missing that
+# construct wrongly refused genuinely CC BY articles.
+
+EXT_LINK_IN_LICENSE_P = _article(
+    """<permissions>
+        <copyright-statement>(c) 2023 by the authors.</copyright-statement>
+        <license><license-p>Licensee MDPI, Basel. This article is an open access
+          article distributed under the terms of the Creative Commons Attribution
+          (CC BY) license (<ext-link xlink:href="https://creativecommons.org/licenses/by/4.0/"
+          ext-link-type="uri">https://creativecommons.org/licenses/by/4.0/</ext-link>).
+        </license-p></license>
+      </permissions>"""
+)
+
+EXT_LINK_NON_COMMERCIAL = _article(
+    """<permissions>
+        <license><license-p>Distributed under a Creative Commons
+          Attribution-NonCommercial license
+          (<ext-link xlink:href="https://creativecommons.org/licenses/by-nc/4.0/"
+          ext-link-type="uri">link</ext-link>).
+        </license-p></license>
+      </permissions>"""
+)
+
+
+def test_accepts_licence_url_from_an_ext_link_inside_license_p() -> None:
+    assertion = assert_commercial_licence("PMC10607427", EXT_LINK_IN_LICENSE_P)
+    assert assertion.licence_ref == "https://creativecommons.org/licenses/by/4.0/"
+    assert assertion.source == "license-p/ext-link"
+
+
+def test_still_refuses_a_non_commercial_ext_link() -> None:
+    """Widening where we look must not widen what we accept."""
+    with pytest.raises(LicenceNotRedistributable):
+        assert_commercial_licence("PMCX", EXT_LINK_NON_COMMERCIAL)
+
+
+def test_ext_link_outside_permissions_is_still_ignored() -> None:
+    """The scoping rule holds: only the permissions block speaks for the article."""
+    sneaky = _article("").replace(
+        b"<p>Text.</p>",
+        b'<p>See <ext-link xlink:href="https://creativecommons.org/licenses/by/4.0/">'
+        b"CC BY</ext-link>.</p>",
+    )
+    with pytest.raises(LicenceNotRedistributable, match="no licence URL"):
+        assert_commercial_licence("PMCY", sneaky)

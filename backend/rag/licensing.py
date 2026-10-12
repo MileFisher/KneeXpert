@@ -74,6 +74,22 @@ class LicenceAssertion:
     """Which JATS construct carried the ref: "ali:license_ref" or "xlink:href"."""
 
 
+def _localname(tag: str) -> str:
+    return tag.rsplit("}", 1)[-1] if "}" in tag else tag
+
+
+def _is_creative_commons(url: str) -> bool:
+    """Whether a URL is a Creative Commons licence deed.
+
+    Used to pick the licence out of ``<license-p>`` prose, which also links to
+    unrelated things. Says nothing about whether the licence is *acceptable* —
+    the allowlist decides that, so an NC deed matches here and is refused later.
+    """
+    return "creativecommons.org/licenses/" in url.lower() or (
+        "creativecommons.org/publicdomain/" in url.lower()
+    )
+
+
 def normalise_licence_ref(raw: str) -> str:
     """Reduce a licence URL to a canonical form for comparison.
 
@@ -121,6 +137,21 @@ def extract_licence_declarations(xml_bytes: bytes) -> list[LicenceDeclaration]:
             href = licence.get(f"{{{JATS_NS['xlink']}}}href")
             if href and href.strip():
                 declarations.append(LicenceDeclaration(href.strip(), "xlink:href"))
+
+            # MDPI, Springer Nature and others put the licence URL in an
+            # <ext-link> inside <license-p> rather than on <license> itself.
+            # That is still machine-readable and still inside the permissions
+            # block, so it speaks for this article; missing it refused genuinely
+            # CC BY papers. Only CC URLs are collected, so the surrounding
+            # boilerplate about third-party material contributes nothing.
+            for link in licence.iter():
+                if _localname(link.tag) != "ext-link":
+                    continue
+                link_href = link.get(f"{{{JATS_NS['xlink']}}}href")
+                if link_href and _is_creative_commons(link_href):
+                    declarations.append(
+                        LicenceDeclaration(link_href.strip(), "license-p/ext-link")
+                    )
     return declarations
 
 

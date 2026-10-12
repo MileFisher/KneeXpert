@@ -1,6 +1,11 @@
 import jsPDF from "jspdf";
 import "jspdf-autotable";
 import type { Patient } from "@/data/patients";
+import {
+  approvedNoteText,
+  approvedNotes,
+  noteAttributionLine,
+} from "./clinicalNote";
 
 // KL grading criteria
 const klCriteria = [
@@ -128,6 +133,42 @@ export function generateReportPDF(patient: Patient): jsPDF {
     });
     y += 4;
   }
+
+  // Signed-off clinical notes. Only accepted or edited notes appear: the PDF is
+  // the record artifact, so this is where "reviewed before it enters the record"
+  // is actually enforced rather than merely displayed.
+  approvedNotes(report).forEach(note => {
+    doc.setFont("helvetica", "bold");
+    doc.setTextColor(23, 37, 84);
+    doc.text(`Clinical Note (${note.modality.toUpperCase()})`, margin, y);
+    y += 5;
+
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(8);
+    doc.setTextColor(120, 120, 120);
+    const attribution = doc.splitTextToSize(
+      noteAttributionLine(note),
+      contentWidth,
+    );
+    doc.text(attribution, margin, y);
+    y += attribution.length * 3.5 + 2;
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(40, 40, 40);
+    const body = doc.splitTextToSize(approvedNoteText(note), contentWidth);
+    doc.text(body, margin, y);
+    y += body.length * 4 + 2;
+
+    if (note.nextSteps.length) {
+      note.nextSteps.forEach(step => {
+        const lines = doc.splitTextToSize(`• ${step}`, contentWidth);
+        doc.text(lines, margin, y);
+        y += lines.length * 4;
+      });
+    }
+    y += 4;
+  });
 
   const imgW = (contentWidth - 6) / 2;
   const imgH = 45;

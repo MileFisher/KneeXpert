@@ -31,6 +31,7 @@ import {
   mriViewModeLabel,
   type MriViewMode,
 } from "@/lib/mriAnalysis";
+import { ClinicalNoteSection } from "@/components/diagnostics/ClinicalNoteSection";
 import { MriModelEvaluationPanel } from "@/components/diagnostics/MriModelEvaluationPanel";
 import { XrayModelEvaluationPanel } from "@/components/diagnostics/XrayModelEvaluationPanel";
 import { ScanImageTile } from "@/components/diagnostics/ScanImageTile";
@@ -3513,6 +3514,18 @@ function DiagnosticWorkspace({
 
               {/* Clinical Interpretation + References */}
               <ClinicalInterpretation patient={patient} analysis={computeJointAnalysis(patient, initialBatchResult)} batchResult={initialBatchResult} />
+
+              {/* RAG-grounded note, held apart from the deterministic
+                  interpretation above and gated on physician sign-off. */}
+              {(activeModality === "xray" || activeModality === "mri") && (
+                <ClinicalNoteSection
+                  patient={patient}
+                  modality={activeModality}
+                  grade={result.grade}
+                  confidence={result.confidence}
+                  mriData={activeModality === "mri" ? mriApiData : null}
+                />
+              )}
 
               {/* Actions */}
               <div className="flex items-center justify-between flex-wrap gap-3">

@@ -44,13 +44,16 @@ OLLAMA_TIMEOUT_S = float(os.getenv("OLLAMA_TIMEOUT_S", "120"))
 # silently truncates FROM THE LEFT — dropping the system prompt's safety rules
 # first. Always send this explicitly; never rely on the server default.
 OLLAMA_NUM_CTX = int(os.getenv("OLLAMA_NUM_CTX", "8192"))
-OLLAMA_NUM_PREDICT = int(os.getenv("OLLAMA_NUM_PREDICT", "500"))
+# Headroom for the prompt's stated ceiling (6 sentences + 4 next_steps) plus
+# JSON overhead, so a compliant note is never truncated mid-structure.
+OLLAMA_NUM_PREDICT = int(os.getenv("OLLAMA_NUM_PREDICT", "700"))
 
 # A dead GPU box must not hang /health, which the frontend calls on page load.
 # The connect phase is budgeted separately and tightly: on Windows an unreachable
 # host can burn the whole timeout on an IPv6 attempt before falling back to IPv4,
 # so a single overall timeout understates the real wall-clock cost.
-LLM_PROBE_CONNECT_TIMEOUT_S = 0.5
+HTTP_CONNECT_TIMEOUT_S = 0.5
+"""Connect budget for every call to the generation host, not just probes."""
 LLM_PROBE_TIMEOUT_S = 1.5
 LLM_PROBE_CACHE_TTL_S = 30.0
 

@@ -17,7 +17,7 @@ from mri.pipeline import mri_models_available, predict_mri
 from xray import DEFAULT_ENSEMBLE_MODELS, MODELS_CONFIG, ModelLoader, all_available_model_ids
 from feedback_engine import generate_feedback
 from model_profiler import get_all_flops, get_model_flops_for_response
-from rag.schemas import FeedbackGenerateRequest
+from rag.schemas import FeedbackGenerateRequest, FeedbackGenerateResponse
 from rag.service import CorpusNotIndexed, generate_clinical_note
 from rag.status import rag_health
 
@@ -67,8 +67,8 @@ async def health_check():
     }
 
 
-@app.post("/api/feedback/generate")
-def generate_feedback_note(payload: FeedbackGenerateRequest):
+@app.post("/api/feedback/generate", response_model=FeedbackGenerateResponse)
+def generate_feedback_note(payload: FeedbackGenerateRequest) -> JSONResponse:
     """Generate a RAG-grounded clinical note for one diagnostic result.
 
     Deliberately ``def`` and not ``async def``. Every other route here is async

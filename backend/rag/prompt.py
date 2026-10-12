@@ -20,7 +20,13 @@ import json
 import re
 from typing import Any
 
-from rag.schemas import ClinicalNote, FeedbackGenerateRequest, RetrievedPassage
+from feedback_engine import GRADE_LABELS
+from rag.schemas import (
+    ClinicalNote,
+    FeedbackGenerateRequest,
+    ParseMode,
+    RetrievedPassage,
+)
 
 SYSTEM_MESSAGE = """\
 You are a musculoskeletal radiology assistant drafting a clinical note for a \
@@ -56,13 +62,9 @@ MODALITY_LABEL = {
     "mri": "MRI (MACS-Net artifact removal -> DeiT-Small multi-label)",
 }
 
-GRADE_LABEL = {
-    0: "Normal",
-    1: "Doubtful",
-    2: "Mild",
-    3: "Moderate",
-    4: "Severe",
-}
+# Reused rather than restated: the deterministic feedback engine already owns
+# the KL grade vocabulary, and two copies would drift.
+GRADE_LABEL = GRADE_LABELS
 
 
 def _confidence_hint(confidence: float) -> str:
@@ -79,6 +81,17 @@ def _confidence_hint(confidence: float) -> str:
     return " (high)"
 
 
+def sorted_labels(req: FeedbackGenerateRequest) -> list[Any]:
+    """Predicted labels, most probable first, ties broken by name.
+
+    Shared with the retriever so the prompt and the query always agree on order,
+    which is part of what makes a run reproducible.
+    """
+    return sorted(
+        req.positive_labels, key=lambda label: (-label.probability, label.name)
+    )
+
+
 def _findings_block(req: FeedbackGenerateRequest) -> list[str]:
     lines = [
         "## FINDINGS",
@@ -91,9 +104,7 @@ def _findings_block(req: FeedbackGenerateRequest) -> list[str]:
     # commentary on findings the modality cannot see.
     if req.modality == "mri" and req.positive_labels:
         lines.append("Positive SKM-TEA categories (probability, descending):")
-        ordered = sorted(
-            req.positive_labels, key=lambda label: (-label.probability, label.name)
-        )
+        ordered = sorted_labels(req)
         lines.extend(f"  - {lb.name}: {lb.probability:.1f}%" for lb in ordered)
     return lines
 
@@ -193,16 +204,17 @@ _JSON_OBJECT = re.compile(r"\{.*\}", re.S)
 CITATION_MARKER = re.compile(r"\[(\d+)\]")
 
 
-def parse_note(raw: str) -> ClinicalNote | None:
+def parse_note(raw: str) -> tuple[ClinicalNote | None, ParseMode | None]:
     """Parse model output into a note, tolerantly.
 
-    Returns None only for genuinely empty output. Anything else yields a note,
-    falling back to treating the whole response as the synthesis — but the caller
-    records *how* it parsed, because a rising prose-fallback rate is a reportable
-    signal about the model rather than a detail to swallow.
+    Returns ``(None, None)`` only for genuinely empty output. Anything else
+    yields a note paired with the mode it was read in, falling back to treating
+    the whole response as the synthesis. The mode is returned rather than
+    swallowed because a rising prose-fallback rate is a reportable signal about
+    the model, and the caller records it on the response.
     """
     if not raw or not raw.strip():
-        return None
+        return None, None
 
     match = _JSON_OBJECT.search(raw)
     if match:
@@ -214,12 +226,17 @@ def parse_note(raw: str) -> ClinicalNote | None:
             synthesis = payload.get("synthesis")
             steps = payload.get("next_steps") or []
             if isinstance(synthesis, str) and synthesis.strip():
-                return ClinicalNote(
-                    synthesis=synthesis.strip(),
-                    next_steps=[str(s).strip() for s in steps if str(s).strip()],
+                return (
+                    ClinicalNote(
+                        synthesis=synthesis.strip(),
+                        next_steps=[
+                            str(s).strip() for s in steps if str(s).strip()
+                        ],
+                    ),
+                    "json",
                 )
 
-    return ClinicalNote(synthesis=raw.strip(), next_steps=[])
+    return ClinicalNote(synthesis=raw.strip(), next_steps=[]), "prose_fallback"
 
 
 def revision_hint_for(rejected: list[str]) -> str:

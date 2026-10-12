@@ -159,37 +159,41 @@ def test_passages_are_numbered_from_one() -> None:
 
 
 def test_parses_well_formed_json() -> None:
-    note = parse_note(
+    note, mode = parse_note(
         '{"synthesis": "Grade 3 changes. [1]", "next_steps": ["Refer. [2]"]}'
     )
     assert note is not None
     assert note.synthesis == "Grade 3 changes. [1]"
     assert note.next_steps == ["Refer. [2]"]
+    assert mode == "json"
 
 
 def test_parses_json_wrapped_in_prose() -> None:
     raw = 'Here is the note:\n{"synthesis": "A finding.", "next_steps": []}\nDone.'
-    note = parse_note(raw)
+    note, mode = parse_note(raw)
     assert note is not None
     assert note.synthesis == "A finding."
+    assert mode == "json"
 
 
 def test_falls_back_to_treating_plain_prose_as_the_synthesis() -> None:
-    """Tolerant rather than failing — but the caller counts these separately."""
-    note = parse_note("The knee shows moderate degenerative change.")
+    """Tolerant rather than failing, but the mode is reported so it can be counted."""
+    note, mode = parse_note("The knee shows moderate degenerative change.")
     assert note is not None
     assert "moderate degenerative change" in note.synthesis
     assert note.next_steps == []
+    assert mode == "prose_fallback"
 
 
 def test_returns_none_for_empty_output() -> None:
-    assert parse_note("") is None
-    assert parse_note("   \n  ") is None
+    assert parse_note("") == (None, None)
+    assert parse_note("   \n  ") == (None, None)
 
 
 def test_truncated_json_degrades_to_prose_rather_than_raising() -> None:
-    note = parse_note('{"synthesis": "Grade 3 chan')
+    note, mode = parse_note('{"synthesis": "Grade 3 chan')
     assert note is not None
+    assert mode == "prose_fallback"
 
 
 def test_json_schema_declares_the_expected_fields() -> None:

@@ -18,8 +18,10 @@ Degradation policy, which is the substance of this module:
 from __future__ import annotations
 
 import time
+from typing import Any
 
 from rag.config import (
+    GEN_SEED,
     GROUNDEDNESS_TAU,
     MAX_RETRIES,
     OLLAMA_MODEL,
@@ -41,7 +43,36 @@ class CorpusNotIndexed(RuntimeError):
 
 
 def _to_schema(passages: list[RetrievedPassage]) -> list[PassageSchema]:
-    return [PassageSchema(**p.to_dict()) for p in passages]  # type: ignore[arg-type]
+    """Convert store hits to the response shape.
+
+    Fields are listed explicitly rather than splatted from a dict: the two types
+    are field-identical, which is exactly why they were easy to pass
+    interchangeably, and spelling them out means a typechecker catches the next
+    divergence instead of a cast hiding it.
+    """
+    return [
+        PassageSchema(
+            passage_id=p.passage_id,
+            source=p.source,
+            text=p.text,
+            score=p.score,
+            licence=p.licence,
+            source_type=p.source_type,
+            url=p.url,
+        )
+        for p in passages
+    ]
+
+
+def _retrieval_ks_for_attempt(attempt: int, include_passages: bool) -> int:
+    """Premise breadth for one attempt.
+
+    Deliberately ignores ``include_passages``. Whether passages go *into the
+    prompt* is what distinguishes the configurations; how many are retrieved as
+    scoring premises must not, or a groundedness difference between configs would
+    partly measure premise count rather than retrieval.
+    """
+    return TOP_K_RETRY if attempt >= MAX_RETRIES else TOP_K
 
 
 def generate_clinical_note(
@@ -75,7 +106,7 @@ def generate_clinical_note(
     passages = _to_schema(retrieve(req, k=TOP_K))
     mark("retrieval", t)
 
-    def respond(**kwargs) -> FeedbackGenerateResponse:
+    def respond(**kwargs: Any) -> FeedbackGenerateResponse:
         mark("total", started)
         kwargs.setdefault("retrieved_passages", passages)
         return FeedbackGenerateResponse(
@@ -84,6 +115,12 @@ def generate_clinical_note(
             latency_ms=latency,
             **kwargs,
         )
+
+    # A populated index can still return nothing for a given query. Rendering
+    # "(no passages retrieved)" while the system rules demand a citation on every
+    # claim is an invitation to invent markers, so withhold instead.
+    if not passages:
+        return respond(fallback_reason="empty_corpus")
 
     if not ollama_client.is_available():
         return respond(fallback_reason="llm_unavailable")
@@ -98,15 +135,21 @@ def generate_clinical_note(
 
         # The final attempt re-retrieves more widely: if the note could not be
         # grounded in the original passages, offering the same ones again is the
-        # least likely thing to help.
-        if attempt == MAX_RETRIES and include_passages:
-            passages = _to_schema(retrieve(req, k=TOP_K_RETRY))
+        # least likely thing to help. Applied in every configuration -- see
+        # _retrieval_ks_for_attempt.
+        wanted_k = _retrieval_ks_for_attempt(attempt, include_passages)
+        if wanted_k != TOP_K:
+            passages = _to_schema(retrieve(req, k=wanted_k))
 
         messages = build_messages(req, passages, include_passages)
         try:
             raw = ollama_client.chat(
                 messages,
                 temperature=temperature,
+                # A fixed seed with an unchanged prompt makes a retry nearly
+                # pointless. Offsetting by the attempt keeps retries independent
+                # while staying reproducible for a given payload.
+                seed=GEN_SEED + attempt,
                 json_schema=NOTE_JSON_SCHEMA,
             )
         except ollama_client.OllamaTimeout:
@@ -116,7 +159,7 @@ def generate_clinical_note(
             mark("generation", t)
             return respond(fallback_reason="llm_unavailable", gate_attempts=attempts)
 
-        note = parse_note(raw)
+        note, parse_mode = parse_note(raw)
         if note is None:
             continue
 
@@ -128,6 +171,7 @@ def generate_clinical_note(
             clinical_note=note,
             generated_by=f"{OLLAMA_MODEL} via Ollama",
             gate_attempts=attempts,
+            parse_mode=parse_mode,
         )
 
     mark("generation", t)

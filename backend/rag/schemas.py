@@ -1,7 +1,9 @@
 """Request and response shapes for the clinical-note endpoint.
 
-These are the cross-process contract: every field here has a mirror in
-``frontend/src/lib/diagnosticApi.ts``. Change one, change the other.
+These are the cross-process contract. The frontend mirror lands in Phase 3;
+until then the endpoint declares ``response_model`` so the shape is published in
+OpenAPI and Phase 3 has something to generate from. Once the mirror exists in
+``frontend/src/lib/diagnosticApi.ts``, changing one means changing the other.
 
 The response is deliberately shaped so that a *withheld* note is still a
 well-formed 200: ``clinical_note`` goes null and ``fallback_reason`` says why,
@@ -25,9 +27,14 @@ FallbackReason = Literal[
     "timeout",
     "gate_rejected",
     "parse_failed",
-    "nli_unavailable",
     "empty_corpus",
 ]
+"""Runtime conditions only. Deployment faults an operator must fix -- a missing
+index, missing entailment weights -- are 503s, not fallback reasons."""
+
+ParseMode = Literal["json", "prose_fallback"]
+"""How the model's output was read. A rising prose_fallback rate says something
+about the model and must not vanish into a successful response."""
 
 
 class PatientContext(BaseModel):
@@ -110,5 +117,6 @@ class FeedbackGenerateResponse(BaseModel):
     gate_attempts: int = 0
     gate_threshold: float
     fallback_reason: FallbackReason | None = None
+    parse_mode: ParseMode | None = None
     latency_ms: dict[str, int] = Field(default_factory=dict)
     config: NoteConfig = "rag_gate"

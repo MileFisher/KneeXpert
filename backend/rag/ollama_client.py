@@ -18,7 +18,7 @@ import httpx
 
 from rag.config import (
     GEN_SEED,
-    LLM_PROBE_CONNECT_TIMEOUT_S,
+    HTTP_CONNECT_TIMEOUT_S,
     LLM_PROBE_TIMEOUT_S,
     OLLAMA_BASE_URL,
     OLLAMA_MODEL,
@@ -36,16 +36,20 @@ class OllamaTimeout(RuntimeError):
     """The host accepted the request but did not finish in time."""
 
 
-def is_available(timeout_s: float = LLM_PROBE_TIMEOUT_S) -> bool:
-    """Whether the host answers and is serving models.
+def _timeout(total_s: float) -> httpx.Timeout:
+    """Timeout with a separate, tighter connect budget.
 
-    Uses a separate, tighter connect budget: on Windows an unreachable host can
-    burn an entire single timeout on an IPv6 attempt before falling back to IPv4,
-    so one overall value understates the real wall-clock cost.
+    On Windows an unreachable host can burn an entire single timeout on an IPv6
+    attempt before falling back to IPv4, so one overall value understates the
+    real wall-clock cost of a dead host.
     """
+    return httpx.Timeout(total_s, connect=HTTP_CONNECT_TIMEOUT_S)
+
+
+def is_available(timeout_s: float = LLM_PROBE_TIMEOUT_S) -> bool:
+    """Whether the host answers and is serving models."""
     try:
-        timeout = httpx.Timeout(timeout_s, connect=LLM_PROBE_CONNECT_TIMEOUT_S)
-        with httpx.Client(timeout=timeout) as client:
+        with httpx.Client(timeout=_timeout(timeout_s)) as client:
             response = client.get(f"{OLLAMA_BASE_URL}/api/tags")
             response.raise_for_status()
         return True
@@ -91,8 +95,7 @@ def chat(
         payload["format"] = json_schema
 
     try:
-        timeout = httpx.Timeout(timeout_s, connect=LLM_PROBE_CONNECT_TIMEOUT_S)
-        with httpx.Client(timeout=timeout) as client:
+        with httpx.Client(timeout=_timeout(timeout_s)) as client:
             response = client.post(f"{OLLAMA_BASE_URL}/api/chat", json=payload)
             response.raise_for_status()
             body = response.json()

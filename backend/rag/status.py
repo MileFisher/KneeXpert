@@ -22,7 +22,7 @@ from rag.config import (
     EMBED_MODEL,
     INDEX_DIR,
     LLM_PROBE_CACHE_TTL_S,
-    LLM_PROBE_CONNECT_TIMEOUT_S,
+    HTTP_CONNECT_TIMEOUT_S,
     LLM_PROBE_TIMEOUT_S,
     NLI_MODEL,
     OLLAMA_BASE_URL,
@@ -81,7 +81,7 @@ async def probe_llm(force: bool = False) -> dict[str, Any]:
     }
     try:
         timeout = httpx.Timeout(
-            LLM_PROBE_TIMEOUT_S, connect=LLM_PROBE_CONNECT_TIMEOUT_S
+            LLM_PROBE_TIMEOUT_S, connect=HTTP_CONNECT_TIMEOUT_S
         )
         async with httpx.AsyncClient(timeout=timeout) as client:
             response = await client.get(f"{OLLAMA_BASE_URL}/api/tags")

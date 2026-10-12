@@ -1,0 +1,1256 @@
+[
+  {
+    "case_id": "xray-g0-c0-low-young-athlete",
+    "modality": "xray",
+    "grade": 0,
+    "confidence": 61.0,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    }
+  },
+  {
+    "case_id": "xray-g0-c0-mid-midlife-raised-bmi",
+    "modality": "xray",
+    "grade": 0,
+    "confidence": 79.5,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    }
+  },
+  {
+    "case_id": "xray-g0-c0-high-older-prior-surgery",
+    "modality": "xray",
+    "grade": 0,
+    "confidence": 94.0,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    }
+  },
+  {
+    "case_id": "xray-g1-c0-low-midlife-raised-bmi",
+    "modality": "xray",
+    "grade": 1,
+    "confidence": 61.0,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    }
+  },
+  {
+    "case_id": "xray-g1-c0-mid-older-prior-surgery",
+    "modality": "xray",
+    "grade": 1,
+    "confidence": 79.5,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    }
+  },
+  {
+    "case_id": "xray-g1-c0-high-elderly-comorbid",
+    "modality": "xray",
+    "grade": 1,
+    "confidence": 94.0,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    }
+  },
+  {
+    "case_id": "xray-g2-c0-low-older-prior-surgery",
+    "modality": "xray",
+    "grade": 2,
+    "confidence": 61.0,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    }
+  },
+  {
+    "case_id": "xray-g2-c0-mid-elderly-comorbid",
+    "modality": "xray",
+    "grade": 2,
+    "confidence": 79.5,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    }
+  },
+  {
+    "case_id": "xray-g2-c0-high-young-athlete",
+    "modality": "xray",
+    "grade": 2,
+    "confidence": 94.0,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    }
+  },
+  {
+    "case_id": "xray-g3-c0-low-elderly-comorbid",
+    "modality": "xray",
+    "grade": 3,
+    "confidence": 61.0,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    }
+  },
+  {
+    "case_id": "xray-g3-c0-mid-young-athlete",
+    "modality": "xray",
+    "grade": 3,
+    "confidence": 79.5,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    }
+  },
+  {
+    "case_id": "xray-g3-c0-high-midlife-raised-bmi",
+    "modality": "xray",
+    "grade": 3,
+    "confidence": 94.0,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    }
+  },
+  {
+    "case_id": "xray-g4-c0-low-young-athlete",
+    "modality": "xray",
+    "grade": 4,
+    "confidence": 61.0,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    }
+  },
+  {
+    "case_id": "xray-g4-c0-mid-midlife-raised-bmi",
+    "modality": "xray",
+    "grade": 4,
+    "confidence": 79.5,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    }
+  },
+  {
+    "case_id": "xray-g4-c0-high-older-prior-surgery",
+    "modality": "xray",
+    "grade": 4,
+    "confidence": 94.0,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    }
+  },
+  {
+    "case_id": "mri-g0-c0-low-young-athlete",
+    "modality": "mri",
+    "grade": 0,
+    "confidence": 61.0,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    }
+  },
+  {
+    "case_id": "mri-g0-c0-mid-midlife-raised-bmi",
+    "modality": "mri",
+    "grade": 0,
+    "confidence": 79.5,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    }
+  },
+  {
+    "case_id": "mri-g0-c0-high-older-prior-surgery",
+    "modality": "mri",
+    "grade": 0,
+    "confidence": 94.0,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    }
+  },
+  {
+    "case_id": "mri-g0-c1-low-midlife-raised-bmi",
+    "modality": "mri",
+    "grade": 0,
+    "confidence": 61.0,
+    "positive_labels": [
+      {
+        "name": "Effusion",
+        "probability": 62.0
+      }
+    ],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    }
+  },
+  {
+    "case_id": "mri-g0-c1-mid-older-prior-surgery",
+    "modality": "mri",
+    "grade": 0,
+    "confidence": 79.5,
+    "positive_labels": [
+      {
+        "name": "Effusion",
+        "probability": 62.0
+      }
+    ],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    }
+  },
+  {
+    "case_id": "mri-g0-c1-high-elderly-comorbid",
+    "modality": "mri",
+    "grade": 0,
+    "confidence": 94.0,
+    "positive_labels": [
+      {
+        "name": "Effusion",
+        "probability": 62.0
+      }
+    ],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    }
+  },
+  {
+    "case_id": "mri-g1-c0-low-midlife-raised-bmi",
+    "modality": "mri",
+    "grade": 1,
+    "confidence": 61.0,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Myxoid)",
+        "probability": 58.0
+      }
+    ],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    }
+  },
+  {
+    "case_id": "mri-g1-c0-mid-older-prior-surgery",
+    "modality": "mri",
+    "grade": 1,
+    "confidence": 79.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Myxoid)",
+        "probability": 58.0
+      }
+    ],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    }
+  },
+  {
+    "case_id": "mri-g1-c0-high-elderly-comorbid",
+    "modality": "mri",
+    "grade": 1,
+    "confidence": 94.0,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Myxoid)",
+        "probability": 58.0
+      }
+    ],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    }
+  },
+  {
+    "case_id": "mri-g1-c1-low-older-prior-surgery",
+    "modality": "mri",
+    "grade": 1,
+    "confidence": 61.0,
+    "positive_labels": [
+      {
+        "name": "Cartilage Lesion (1)",
+        "probability": 64.0
+      },
+      {
+        "name": "Effusion",
+        "probability": 55.0
+      }
+    ],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    }
+  },
+  {
+    "case_id": "mri-g1-c1-mid-elderly-comorbid",
+    "modality": "mri",
+    "grade": 1,
+    "confidence": 79.5,
+    "positive_labels": [
+      {
+        "name": "Cartilage Lesion (1)",
+        "probability": 64.0
+      },
+      {
+        "name": "Effusion",
+        "probability": 55.0
+      }
+    ],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    }
+  },
+  {
+    "case_id": "mri-g1-c1-high-young-athlete",
+    "modality": "mri",
+    "grade": 1,
+    "confidence": 94.0,
+    "positive_labels": [
+      {
+        "name": "Cartilage Lesion (1)",
+        "probability": 64.0
+      },
+      {
+        "name": "Effusion",
+        "probability": 55.0
+      }
+    ],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    }
+  },
+  {
+    "case_id": "mri-g2-c0-low-older-prior-surgery",
+    "modality": "mri",
+    "grade": 2,
+    "confidence": 61.0,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Horizontal)",
+        "probability": 77.0
+      },
+      {
+        "name": "Cartilage Lesion (2A)",
+        "probability": 69.0
+      }
+    ],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    }
+  },
+  {
+    "case_id": "mri-g2-c0-mid-elderly-comorbid",
+    "modality": "mri",
+    "grade": 2,
+    "confidence": 79.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Horizontal)",
+        "probability": 77.0
+      },
+      {
+        "name": "Cartilage Lesion (2A)",
+        "probability": 69.0
+      }
+    ],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    }
+  },
+  {
+    "case_id": "mri-g2-c0-high-young-athlete",
+    "modality": "mri",
+    "grade": 2,
+    "confidence": 94.0,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Horizontal)",
+        "probability": 77.0
+      },
+      {
+        "name": "Cartilage Lesion (2A)",
+        "probability": 69.0
+      }
+    ],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    }
+  },
+  {
+    "case_id": "mri-g2-c1-low-elderly-comorbid",
+    "modality": "mri",
+    "grade": 2,
+    "confidence": 61.0,
+    "positive_labels": [
+      {
+        "name": "Cartilage Lesion (2A)",
+        "probability": 81.0
+      },
+      {
+        "name": "Effusion",
+        "probability": 72.0
+      }
+    ],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    }
+  },
+  {
+    "case_id": "mri-g2-c1-mid-young-athlete",
+    "modality": "mri",
+    "grade": 2,
+    "confidence": 79.5,
+    "positive_labels": [
+      {
+        "name": "Cartilage Lesion (2A)",
+        "probability": 81.0
+      },
+      {
+        "name": "Effusion",
+        "probability": 72.0
+      }
+    ],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    }
+  },
+  {
+    "case_id": "mri-g2-c1-high-midlife-raised-bmi",
+    "modality": "mri",
+    "grade": 2,
+    "confidence": 94.0,
+    "positive_labels": [
+      {
+        "name": "Cartilage Lesion (2A)",
+        "probability": 81.0
+      },
+      {
+        "name": "Effusion",
+        "probability": 72.0
+      }
+    ],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    }
+  },
+  {
+    "case_id": "mri-g2-c2-low-young-athlete",
+    "modality": "mri",
+    "grade": 2,
+    "confidence": 61.0,
+    "positive_labels": [
+      {
+        "name": "Ligament Tear (Low-Grade Sprain)",
+        "probability": 66.0
+      }
+    ],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    }
+  },
+  {
+    "case_id": "mri-g2-c2-mid-midlife-raised-bmi",
+    "modality": "mri",
+    "grade": 2,
+    "confidence": 79.5,
+    "positive_labels": [
+      {
+        "name": "Ligament Tear (Low-Grade Sprain)",
+        "probability": 66.0
+      }
+    ],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    }
+  },
+  {
+    "case_id": "mri-g2-c2-high-older-prior-surgery",
+    "modality": "mri",
+    "grade": 2,
+    "confidence": 94.0,
+    "positive_labels": [
+      {
+        "name": "Ligament Tear (Low-Grade Sprain)",
+        "probability": 66.0
+      }
+    ],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    }
+  },
+  {
+    "case_id": "mri-g2-c3-low-midlife-raised-bmi",
+    "modality": "mri",
+    "grade": 2,
+    "confidence": 61.0,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Vertical/Longitudinal)",
+        "probability": 83.0
+      }
+    ],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    }
+  },
+  {
+    "case_id": "mri-g2-c3-mid-older-prior-surgery",
+    "modality": "mri",
+    "grade": 2,
+    "confidence": 79.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Vertical/Longitudinal)",
+        "probability": 83.0
+      }
+    ],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    }
+  },
+  {
+    "case_id": "mri-g2-c3-high-elderly-comorbid",
+    "modality": "mri",
+    "grade": 2,
+    "confidence": 94.0,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Vertical/Longitudinal)",
+        "probability": 83.0
+      }
+    ],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    }
+  },
+  {
+    "case_id": "mri-g3-c0-low-elderly-comorbid",
+    "modality": "mri",
+    "grade": 3,
+    "confidence": 61.0,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Radial)",
+        "probability": 91.2
+      },
+      {
+        "name": "Effusion",
+        "probability": 84.7
+      },
+      {
+        "name": "Cartilage Lesion (2B)",
+        "probability": 66.1
+      }
+    ],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    }
+  },
+  {
+    "case_id": "mri-g3-c0-mid-young-athlete",
+    "modality": "mri",
+    "grade": 3,
+    "confidence": 79.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Radial)",
+        "probability": 91.2
+      },
+      {
+        "name": "Effusion",
+        "probability": 84.7
+      },
+      {
+        "name": "Cartilage Lesion (2B)",
+        "probability": 66.1
+      }
+    ],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    }
+  },
+  {
+    "case_id": "mri-g3-c0-high-midlife-raised-bmi",
+    "modality": "mri",
+    "grade": 3,
+    "confidence": 94.0,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Radial)",
+        "probability": 91.2
+      },
+      {
+        "name": "Effusion",
+        "probability": 84.7
+      },
+      {
+        "name": "Cartilage Lesion (2B)",
+        "probability": 66.1
+      }
+    ],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    }
+  },
+  {
+    "case_id": "mri-g3-c1-low-young-athlete",
+    "modality": "mri",
+    "grade": 3,
+    "confidence": 61.0,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Complex)",
+        "probability": 88.0
+      },
+      {
+        "name": "Cartilage Lesion (2B)",
+        "probability": 74.0
+      }
+    ],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    }
+  },
+  {
+    "case_id": "mri-g3-c1-mid-midlife-raised-bmi",
+    "modality": "mri",
+    "grade": 3,
+    "confidence": 79.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Complex)",
+        "probability": 88.0
+      },
+      {
+        "name": "Cartilage Lesion (2B)",
+        "probability": 74.0
+      }
+    ],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    }
+  },
+  {
+    "case_id": "mri-g3-c1-high-older-prior-surgery",
+    "modality": "mri",
+    "grade": 3,
+    "confidence": 94.0,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Complex)",
+        "probability": 88.0
+      },
+      {
+        "name": "Cartilage Lesion (2B)",
+        "probability": 74.0
+      }
+    ],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    }
+  },
+  {
+    "case_id": "mri-g3-c2-low-midlife-raised-bmi",
+    "modality": "mri",
+    "grade": 3,
+    "confidence": 61.0,
+    "positive_labels": [
+      {
+        "name": "Ligament Tear (Moderate Grade Sprain or Mucoid Degeneration)",
+        "probability": 79.0
+      },
+      {
+        "name": "Effusion",
+        "probability": 68.0
+      }
+    ],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    }
+  },
+  {
+    "case_id": "mri-g3-c2-mid-older-prior-surgery",
+    "modality": "mri",
+    "grade": 3,
+    "confidence": 79.5,
+    "positive_labels": [
+      {
+        "name": "Ligament Tear (Moderate Grade Sprain or Mucoid Degeneration)",
+        "probability": 79.0
+      },
+      {
+        "name": "Effusion",
+        "probability": 68.0
+      }
+    ],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    }
+  },
+  {
+    "case_id": "mri-g3-c2-high-elderly-comorbid",
+    "modality": "mri",
+    "grade": 3,
+    "confidence": 94.0,
+    "positive_labels": [
+      {
+        "name": "Ligament Tear (Moderate Grade Sprain or Mucoid Degeneration)",
+        "probability": 79.0
+      },
+      {
+        "name": "Effusion",
+        "probability": 68.0
+      }
+    ],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    }
+  },
+  {
+    "case_id": "mri-g3-c3-low-older-prior-surgery",
+    "modality": "mri",
+    "grade": 3,
+    "confidence": 61.0,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Oblique)",
+        "probability": 86.0
+      },
+      {
+        "name": "Cartilage Lesion (2A)",
+        "probability": 71.0
+      }
+    ],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    }
+  },
+  {
+    "case_id": "mri-g3-c3-mid-elderly-comorbid",
+    "modality": "mri",
+    "grade": 3,
+    "confidence": 79.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Oblique)",
+        "probability": 86.0
+      },
+      {
+        "name": "Cartilage Lesion (2A)",
+        "probability": 71.0
+      }
+    ],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    }
+  },
+  {
+    "case_id": "mri-g3-c3-high-young-athlete",
+    "modality": "mri",
+    "grade": 3,
+    "confidence": 94.0,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Oblique)",
+        "probability": 86.0
+      },
+      {
+        "name": "Cartilage Lesion (2A)",
+        "probability": 71.0
+      }
+    ],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    }
+  },
+  {
+    "case_id": "mri-g4-c0-low-young-athlete",
+    "modality": "mri",
+    "grade": 4,
+    "confidence": 61.0,
+    "positive_labels": [
+      {
+        "name": "Cartilage Lesion (3)",
+        "probability": 94.0
+      },
+      {
+        "name": "Meniscal Tear (Extrusion)",
+        "probability": 89.0
+      },
+      {
+        "name": "Effusion",
+        "probability": 86.0
+      }
+    ],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    }
+  },
+  {
+    "case_id": "mri-g4-c0-mid-midlife-raised-bmi",
+    "modality": "mri",
+    "grade": 4,
+    "confidence": 79.5,
+    "positive_labels": [
+      {
+        "name": "Cartilage Lesion (3)",
+        "probability": 94.0
+      },
+      {
+        "name": "Meniscal Tear (Extrusion)",
+        "probability": 89.0
+      },
+      {
+        "name": "Effusion",
+        "probability": 86.0
+      }
+    ],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    }
+  },
+  {
+    "case_id": "mri-g4-c0-high-older-prior-surgery",
+    "modality": "mri",
+    "grade": 4,
+    "confidence": 94.0,
+    "positive_labels": [
+      {
+        "name": "Cartilage Lesion (3)",
+        "probability": 94.0
+      },
+      {
+        "name": "Meniscal Tear (Extrusion)",
+        "probability": 89.0
+      },
+      {
+        "name": "Effusion",
+        "probability": 86.0
+      }
+    ],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    }
+  },
+  {
+    "case_id": "mri-g4-c1-low-midlife-raised-bmi",
+    "modality": "mri",
+    "grade": 4,
+    "confidence": 61.0,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Flap)",
+        "probability": 85.0
+      },
+      {
+        "name": "Cartilage Lesion (3)",
+        "probability": 90.0
+      }
+    ],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    }
+  },
+  {
+    "case_id": "mri-g4-c1-mid-older-prior-surgery",
+    "modality": "mri",
+    "grade": 4,
+    "confidence": 79.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Flap)",
+        "probability": 85.0
+      },
+      {
+        "name": "Cartilage Lesion (3)",
+        "probability": 90.0
+      }
+    ],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    }
+  },
+  {
+    "case_id": "mri-g4-c1-high-elderly-comorbid",
+    "modality": "mri",
+    "grade": 4,
+    "confidence": 94.0,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Flap)",
+        "probability": 85.0
+      },
+      {
+        "name": "Cartilage Lesion (3)",
+        "probability": 90.0
+      }
+    ],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    }
+  },
+  {
+    "case_id": "mri-g4-c2-low-older-prior-surgery",
+    "modality": "mri",
+    "grade": 4,
+    "confidence": 61.0,
+    "positive_labels": [
+      {
+        "name": "Ligament Tear (Full Thickness/Complete Tear)",
+        "probability": 92.0
+      },
+      {
+        "name": "Cartilage Lesion (3)",
+        "probability": 87.0
+      }
+    ],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    }
+  },
+  {
+    "case_id": "mri-g4-c2-mid-elderly-comorbid",
+    "modality": "mri",
+    "grade": 4,
+    "confidence": 79.5,
+    "positive_labels": [
+      {
+        "name": "Ligament Tear (Full Thickness/Complete Tear)",
+        "probability": 92.0
+      },
+      {
+        "name": "Cartilage Lesion (3)",
+        "probability": 87.0
+      }
+    ],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    }
+  },
+  {
+    "case_id": "mri-g4-c2-high-young-athlete",
+    "modality": "mri",
+    "grade": 4,
+    "confidence": 94.0,
+    "positive_labels": [
+      {
+        "name": "Ligament Tear (Full Thickness/Complete Tear)",
+        "probability": 92.0
+      },
+      {
+        "name": "Cartilage Lesion (3)",
+        "probability": 87.0
+      }
+    ],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    }
+  }
+]

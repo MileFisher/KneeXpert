@@ -18,6 +18,7 @@ Degradation policy, which is the substance of this module:
 from __future__ import annotations
 
 import time
+from dataclasses import dataclass
 from typing import Any
 
 from rag.config import (
@@ -125,6 +126,93 @@ def _triad_for(
         context_relevance=context_relevance(passages) if include_passages else None,
         answer_relevance=round(answer_relevance(build_query(req), answer_text), 4),
         groundedness=round(outcome.groundedness, 4),
+    )
+
+
+@dataclass
+class AttemptResult:
+    """What one generation-and-gate attempt produced.
+
+    Shared by the request path and the evaluation runner: production stops at the
+    first attempt that passes, while the ablation records all of them, and that
+    difference must not become two implementations of the attempt itself.
+    """
+
+    attempt: int
+    note: ClinicalNote | None
+    parse_mode: object | None
+    outcome: GateOutcome | None
+    passages: list[PassageSchema]
+    generation_ms: int
+    gate_ms: int
+    raw: str
+    failure: str | None = None
+
+
+def run_attempt(
+    req: FeedbackGenerateRequest,
+    passages: list[PassageSchema],
+    attempt: int,
+    include_passages: bool,
+    revision_hint: str | None,
+    score_gate: bool = True,
+) -> AttemptResult:
+    """Generate once and, unless told otherwise, score the result.
+
+    ``score_gate`` exists for the ungrounded and no-gate configurations, which
+    still need scores recorded for the results table but must not have the gate
+    influence what is returned.
+    """
+    from rag import ollama_client
+
+    plan = plan_attempt(attempt, MAX_RETRIES)
+    messages = build_messages(
+        req, passages, include_passages, revision_hint=revision_hint
+    )
+
+    t = time.monotonic()
+    try:
+        raw = ollama_client.chat(
+            messages,
+            temperature=plan.temperature,
+            seed=GEN_SEED + attempt,
+            json_schema=NOTE_JSON_SCHEMA,
+        )
+    except ollama_client.OllamaTimeout:
+        return AttemptResult(
+            attempt, None, None, None, passages,
+            int((time.monotonic() - t) * 1000), 0, "", failure="timeout",
+        )
+    except ollama_client.OllamaUnavailable:
+        return AttemptResult(
+            attempt, None, None, None, passages,
+            int((time.monotonic() - t) * 1000), 0, "", failure="llm_unavailable",
+        )
+    generation_ms = int((time.monotonic() - t) * 1000)
+
+    note, parse_mode = parse_note(raw)
+    if note is None:
+        return AttemptResult(
+            attempt, None, None, None, passages, generation_ms, 0, raw,
+            failure="parse_failed",
+        )
+
+    gate_ms = 0
+    outcome: GateOutcome | None = None
+    if score_gate:
+        t = time.monotonic()
+        sentences = note_sentences(note.synthesis, note.next_steps)
+        # The patient's own findings join the retrieved passages as premises,
+        # per §2.9's "patient record and retrieved guidelines". Gate-only:
+        # never reported as retrieved, never counted in context relevance.
+        premises = [findings_premise(req), *passages]
+        outcome = evaluate(
+            groundedness(sentences, premises), threshold=GROUNDEDNESS_TAU
+        )
+        gate_ms = int((time.monotonic() - t) * 1000)
+
+    return AttemptResult(
+        attempt, note, parse_mode, outcome, passages, generation_ms, gate_ms, raw
     )
 
 

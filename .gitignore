@@ -40,6 +40,12 @@ docs/
 # === RAG vector index (binary Qdrant segments — rebuilt by `python -m rag.ingest`) ===
 backend/rag/index/
 
+# === Evaluation output ===
+# Smoke-test runs and plots are disposable. Real ablation results are a
+# research artifact and should be committed deliberately, with the force
+# flag and a commit message saying which model and corpus produced them.
+backend/rag/eval/results/
+
 # === Model checkpoints (kept local, never committed) ===
 **/models/*
 !**/models/

@@ -1,0 +1,134 @@
+"""Orchestrates one clinical-note request. The only module ``app.py`` imports.
+
+Degradation policy, which is the substance of this module:
+
+* **Retrieval always runs**, in every configuration. The ungrounded configuration
+  does not put passages in the prompt, but it still needs them as scoring
+  premises — otherwise "groundedness" has nothing to score against and the
+  ablation is ill-posed.
+* **A withheld note is null, never substituted.** There is no static fallback
+  text. The deterministic ``FeedbackBundle`` is served separately and always, so
+  dressing dictionary output as model output would misreport provenance. The
+  response says ``clinical_note: null`` plus a reason, and the UI renders that.
+* **Runtime failures are 200s.** Only deployment faults (no index) are errors the
+  caller should treat as broken, and those are raised for ``app.py`` to turn into
+  a 503.
+"""
+
+from __future__ import annotations
+
+import time
+
+from rag.config import (
+    GROUNDEDNESS_TAU,
+    MAX_RETRIES,
+    OLLAMA_MODEL,
+    RETRY_TEMPERATURES,
+    TOP_K,
+    TOP_K_RETRY,
+)
+from rag.prompt import NOTE_JSON_SCHEMA, build_messages, parse_note
+from rag.schemas import (
+    FeedbackGenerateRequest,
+    FeedbackGenerateResponse,
+    RetrievedPassage as PassageSchema,
+)
+from rag.store import RetrievedPassage
+
+
+class CorpusNotIndexed(RuntimeError):
+    """No retrieval index is present. A deployment fault, not a runtime condition."""
+
+
+def _to_schema(passages: list[RetrievedPassage]) -> list[PassageSchema]:
+    return [PassageSchema(**p.to_dict()) for p in passages]  # type: ignore[arg-type]
+
+
+def generate_clinical_note(
+    req: FeedbackGenerateRequest,
+) -> FeedbackGenerateResponse:
+    """Retrieve, generate, and (from Phase 2) gate one clinical note.
+
+    Raises:
+        CorpusNotIndexed: the vector index is missing or empty.
+    """
+    from rag import ollama_client
+    from rag.retriever import retrieve
+    from rag.store import get_store
+
+    latency: dict[str, int] = {}
+    started = time.monotonic()
+
+    def mark(stage: str, since: float) -> None:
+        latency[stage] = int((time.monotonic() - since) * 1000)
+
+    # ── Retrieval: always, regardless of configuration ────────────────────────
+    t = time.monotonic()
+    if get_store().count() == 0:
+        raise CorpusNotIndexed(
+            "Retrieval index is empty. Run `python -m rag.ingest` in backend/."
+        )
+    # Converted to the response shape immediately, so exactly one passage type
+    # flows through the rest of this function. The store's dataclass and the
+    # pydantic schema have the same fields, which made them easy to mix up — and
+    # duck typing hid it until a typechecker ran.
+    passages = _to_schema(retrieve(req, k=TOP_K))
+    mark("retrieval", t)
+
+    def respond(**kwargs) -> FeedbackGenerateResponse:
+        mark("total", started)
+        kwargs.setdefault("retrieved_passages", passages)
+        return FeedbackGenerateResponse(
+            gate_threshold=GROUNDEDNESS_TAU,
+            config=req.config,
+            latency_ms=latency,
+            **kwargs,
+        )
+
+    if not ollama_client.is_available():
+        return respond(fallback_reason="llm_unavailable")
+
+    include_passages = req.config != "ungrounded"
+    attempts = 0
+    t = time.monotonic()
+
+    for attempt in range(MAX_RETRIES + 1):
+        attempts = attempt + 1
+        temperature = RETRY_TEMPERATURES[min(attempt, len(RETRY_TEMPERATURES) - 1)]
+
+        # The final attempt re-retrieves more widely: if the note could not be
+        # grounded in the original passages, offering the same ones again is the
+        # least likely thing to help.
+        if attempt == MAX_RETRIES and include_passages:
+            passages = _to_schema(retrieve(req, k=TOP_K_RETRY))
+
+        messages = build_messages(req, passages, include_passages)
+        try:
+            raw = ollama_client.chat(
+                messages,
+                temperature=temperature,
+                json_schema=NOTE_JSON_SCHEMA,
+            )
+        except ollama_client.OllamaTimeout:
+            mark("generation", t)
+            return respond(fallback_reason="timeout", gate_attempts=attempts)
+        except ollama_client.OllamaUnavailable:
+            mark("generation", t)
+            return respond(fallback_reason="llm_unavailable", gate_attempts=attempts)
+
+        note = parse_note(raw)
+        if note is None:
+            continue
+
+        mark("generation", t)
+        # Phase 2 inserts the safety gate here. Until then a parsed note is
+        # returned ungated, and `grounding_score` stays None rather than being
+        # filled with a placeholder that would read as a real measurement.
+        return respond(
+            clinical_note=note,
+            generated_by=f"{OLLAMA_MODEL} via Ollama",
+            gate_attempts=attempts,
+        )
+
+    mark("generation", t)
+    return respond(fallback_reason="parse_failed", gate_attempts=attempts)

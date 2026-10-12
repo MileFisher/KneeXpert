@@ -1,0 +1,54 @@
+# Seed article list for the clinical grounding corpus.
+#
+# Committed deliberately: harvest reads this file rather than performing a
+# live search, because search ranking drifts and a re-run months later would
+# silently produce a different corpus, invalidating any reported numbers.
+#
+# Selection rule: for each clinical topic below, the most-cited Europe PMC
+# open-access hit whose licence is CC0, CC BY or CC BY-SA. NC and ND variants
+# are excluded -- see rag/licensing.py for why.
+#
+# Licences shown are as reported by Europe PMC at selection time. They are
+# re-verified from each article's own JATS XML at harvest, and harvest refuses
+# anything that no longer checks out.
+#
+# Blank lines and '#' comments are ignored. Edit freely: this is the one file
+# that decides what the system's clinical claims are grounded on.
+
+# --- Radiographic KL grading, and grade-vs-symptom discordance ---
+#   Automatic Knee Osteoarthritis Diagnosis from Plain Radiographs: A Deep
+#   Learning-Based Approach
+#   Scientific reports, 2018 | cc by | cited 314x
+PMC5789045
+#   The discordance between clinical and radiographic knee osteoarthritis: a
+#   systematic search and summary of the literature
+#   BMC musculoskeletal disorders, 2008 | cc by | cited 686x
+PMC2542996
+
+# --- Knee OA management ---
+#   Global management of patients with knee osteoarthritis begins with
+#   quality of life assessment: a systematic review
+#   BMC musculoskeletal disorders, 2019 | cc by | cited 190x
+PMC6815415
+
+# --- Meniscal tear pathology and management ---
+#   Meniscus Tear: Pathology, Incidence, and Management
+#   Cureus, 2022 | cc by | cited 64x
+PMC9205760
+
+# --- Cartilage lesion management ---
+#   Knee Cartilage Lesion Management-Current Trends in Clinical Practice
+#   Journal of clinical medicine, 2023 | cc by | cited 29x
+PMC10607427
+
+# --- Knee MRI scoring and diagnostic performance ---
+#   Comparison of Diagnostic Performance of Semi-Quantitative Knee
+#   Ultrasound and Knee Radiography with MRI: Oulu Knee Osteoarthritis Study
+#   Scientific reports, 2016 | cc by | cited 68x
+PMC4772126
+
+# --- Effusion and synovitis ---
+#   Inhibition of Synovial Macrophage Pyroptosis Alleviates Synovitis and
+#   Fibrosis in Knee Osteoarthritis
+#   Mediators of inflammation, 2019 | cc by | cited 103x
+PMC6754937

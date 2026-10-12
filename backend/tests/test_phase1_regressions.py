@@ -19,28 +19,29 @@ PAYLOAD = FeedbackGenerateRequest(
 # ── Premise symmetry across configurations ────────────────────────────────────
 
 
-def test_retry_retrieval_is_not_gated_on_prompt_inclusion(monkeypatch) -> None:
+def test_retry_retrieval_breadth_does_not_depend_on_the_config() -> None:
     """Every config must be scored against the same premise set.
 
     The final attempt re-retrieves more widely. Gating that on whether passages
     go *into the prompt* meant the grounded configs ended up scored against ten
-    premises and the ungrounded config against six — so a groundedness difference
-    between them would partly measure premise count, not retrieval.
+    premises and the ungrounded config against six - so a groundedness
+    difference between them would partly measure premise count, not retrieval.
+
+    The schedule now lives in plan_attempt, which takes no config at all, so the
+    coupling is absent by construction rather than by discipline.
     """
-    from rag import service
+    import inspect
 
-    ks: list[int] = []
+    from rag.gate import plan_attempt
 
-    def _retrieve(req: Any, k: int = 6) -> list[Any]:
-        ks.append(k)
-        return []
+    parameters = set(inspect.signature(plan_attempt).parameters)
+    assert "include_passages" not in parameters
+    assert "config" not in parameters
 
-    monkeypatch.setattr("rag.retriever.retrieve", _retrieve)
-    monkeypatch.setattr(service, "_to_schema", lambda ps: list(ps))
-
-    grounded = service._retrieval_ks_for_attempt(attempt=2, include_passages=True)
-    ungrounded = service._retrieval_ks_for_attempt(attempt=2, include_passages=False)
-    assert grounded == ungrounded, "premise breadth must not depend on the config"
+    # And the schedule itself is stable for a given attempt.
+    for attempt in range(3):
+        first = plan_attempt(attempt, 2).retrieval_k
+        assert plan_attempt(attempt, 2).retrieval_k == first
 
 
 # ── Zero-hit retrieval ────────────────────────────────────────────────────────

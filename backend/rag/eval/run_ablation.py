@@ -48,14 +48,12 @@ from rag.config import (
     TOP_K,
 )
 from rag.eval.payloads import PayloadCase, load_payloads
+from rag.gate import plan_attempt
+from rag.gate import plan_attempt
+from rag.gate import plan_attempt
 from rag.prompt import revision_hint_for
 from rag.schemas import FeedbackGenerateRequest, NoteConfig
-from rag.service import (
-    AttemptResult,
-    _retrieval_ks_for_attempt,
-    _to_schema,
-    run_attempt,
-)
+from rag.service import AttemptResult, run_attempt, to_schema
 
 CONFIGS: tuple[NoteConfig, ...] = ("ungrounded", "rag_no_gate", "rag_gate")
 RUNS_PATH = EVAL_RESULTS_DIR / "runs.jsonl"
@@ -66,11 +64,16 @@ def record_key(case_id: str, config: str, attempt: int) -> str:
     return f"{case_id}|{config}|{attempt}"
 
 
-def load_done(path: Path) -> set[str]:
-    """Keys already recorded, so a resumed run does not repeat paid work."""
+def load_resumed(path: Path) -> dict[str, dict[str, Any]]:
+    """Rows already recorded, keyed for resume.
+
+    Returns the rows themselves rather than just their keys: a resumed attempt
+    needs its predecessor's rejected sentences to rebuild the revision hint, and
+    dropping them silently changed the prompt on resumed runs.
+    """
     if not path.is_file():
-        return set()
-    done: set[str] = set()
+        return {}
+    rows: dict[str, dict[str, Any]] = {}
     with path.open("r", encoding="utf-8") as fh:
         for line in fh:
             if not line.strip():
@@ -78,18 +81,33 @@ def load_done(path: Path) -> set[str]:
             try:
                 row = json.loads(line)
             except json.JSONDecodeError:
-                # A run killed mid-write can leave a partial final line. Skip it
+                # A run killed mid-write leaves a partial final line. Skip it
                 # rather than refusing to resume.
                 continue
-            done.add(record_key(row["case_id"], row["config"], row["attempt"]))
-    return done
+            rows[record_key(row["case_id"], row["config"], row["attempt"])] = row
+    return rows
+
+
+def revision_hint_from_row(row: dict[str, Any]) -> str | None:
+    """Rebuild a recorded attempt's revision hint from its stored scores.
+
+    Uses the threshold the row was *recorded at*, not the current one, so a
+    resumed run reproduces the prompt the original run would have produced.
+    """
+    tau = row.get("run_time_tau")
+    scores = row.get("sentence_scores") or []
+    if tau is None or not scores:
+        return None
+    rejected = [
+        s["text"]
+        for s in sorted(scores, key=lambda s: s.get("groundedness") or 0.0)
+        if (s.get("groundedness") or 0.0) < tau
+    ]
+    return revision_hint_for(rejected) if rejected else None
 
 
 def _record(
-    case: PayloadCase,
-    config: NoteConfig,
-    result: AttemptResult,
-    retrieval_k: int,
+    case: PayloadCase, config: NoteConfig, result: AttemptResult
 ) -> dict[str, Any]:
     """One JSONL row: everything the sweep and the results table need.
 
@@ -97,6 +115,7 @@ def _record(
     so anything omitted here cannot be recovered without paying for the run again.
     """
     outcome = result.outcome
+    triad = result.triad
     note = result.note
     return {
         "case_id": case["case_id"],
@@ -106,11 +125,16 @@ def _record(
         "grade": case["grade"],
         "confidence": case["confidence"],
         "label_count": len(case["positive_labels"]),
-        "retrieval_k": retrieval_k,
+        "retrieval_k": result.retrieval_k,
         "run_time_tau": GROUNDEDNESS_TAU,
         "failure": result.failure,
         "parse_mode": result.parse_mode,
         "passed_at_run_time_tau": bool(outcome and outcome.passed),
+        # All three RAG Triad dimensions. context_relevance is deliberately None
+        # — not zero — for the ungrounded arm, where no context was supplied and
+        # the metric is undefined; zero would read as "retrieval failed".
+        "context_relevance": triad.context_relevance if triad else None,
+        "answer_relevance": triad.answer_relevance if triad else None,
         "groundedness": outcome.groundedness if outcome else None,
         "synthesis_groundedness": outcome.synthesis_groundedness if outcome else None,
         "next_steps_groundedness": (
@@ -142,7 +166,7 @@ def _record(
 
 
 def run_case(
-    case: PayloadCase, config: NoteConfig, done: set[str]
+    case: PayloadCase, config: NoteConfig, resumed: dict[str, dict[str, Any]]
 ) -> Iterator[dict[str, Any]]:
     """Generate and score every attempt for one case under one configuration."""
     from rag.retriever import retrieve
@@ -158,7 +182,7 @@ def run_case(
     )
     include_passages = config != "ungrounded"
 
-    passages = _to_schema(retrieve(req, k=TOP_K))
+    passages = to_schema(retrieve(req, k=TOP_K))
     if not passages:
         yield {
             "case_id": case["case_id"],
@@ -171,24 +195,31 @@ def run_case(
 
     revision: str | None = None
     for attempt in range(MAX_RETRIES + 1):
-        if record_key(case["case_id"], config, attempt) in done:
-            continue
+        plan = plan_attempt(attempt, MAX_RETRIES)
+        if plan.retrieval_k != TOP_K:
+            passages = to_schema(retrieve(req, k=plan.retrieval_k))
 
-        retrieval_k = _retrieval_ks_for_attempt(attempt, include_passages)
-        if retrieval_k != TOP_K:
-            passages = _to_schema(retrieve(req, k=retrieval_k))
+        # A recorded attempt is not regenerated, but the loop must still walk
+        # through it to carry the revision hint forward. Skipping straight past
+        # it meant a resumed attempt 2 ran with no REVISION block, so resumed
+        # rows came from a different prompt than fresh ones and the results file
+        # mixed two conditions invisibly. The recorded row supplies the hint.
+        recorded = resumed.get(record_key(case["case_id"], config, attempt))
+        if recorded is not None:
+            revision = revision_hint_from_row(recorded) or revision
+            continue
 
         result = run_attempt(
             req,
             passages,
             attempt,
             include_passages,
-            revision_hint=revision if attempt > 0 else None,
+            revision_hint=revision if plan.include_revision_hint else None,
         )
-        yield _record(case, config, result, retrieval_k)
+        yield _record(case, config, result)
 
-        # The revision hint for the *next* attempt names what this one got wrong.
-        # Computed even when this attempt passed, because later attempts are run
+        # The hint for the *next* attempt names what this one got wrong. Computed
+        # even when this attempt passed, because later attempts are generated
         # unconditionally and must still receive a realistic prompt.
         if result.outcome and result.outcome.rejected_sentences:
             revision = revision_hint_for(result.outcome.rejected_sentences)
@@ -222,7 +253,7 @@ def main(argv: list[str] | None = None) -> int:
     configs = CONFIGS if args.config == "all" else (args.config,)
 
     args.out.parent.mkdir(parents=True, exist_ok=True)
-    done = set() if args.fresh else load_done(args.out)
+    resumed = {} if args.fresh else load_resumed(args.out)
     mode = "w" if args.fresh else "a"
 
     total = len(cases) * len(configs) * (MAX_RETRIES + 1)
@@ -230,15 +261,15 @@ def main(argv: list[str] | None = None) -> int:
         f"{len(cases)} cases x {len(configs)} config(s) x "
         f"{MAX_RETRIES + 1} attempts = {total} generations"
     )
-    if done:
-        print(f"resuming: {len(done)} already recorded")
+    if resumed:
+        print(f"resuming: {len(resumed)} already recorded")
 
     written = 0
     started = time.monotonic()
     with args.out.open(mode, encoding="utf-8", newline="\n") as fh:
         for index, case in enumerate(cases, start=1):
             for config in configs:
-                for row in run_case(case, config, done):
+                for row in run_case(case, config, resumed):
                     fh.write(json.dumps(row, ensure_ascii=False) + "\n")
                     # Flushed per row: a rented instance can disappear without
                     # notice, and --resume is only as good as what reached disk.

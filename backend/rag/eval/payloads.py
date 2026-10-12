@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from pathlib import Path
 from dataclasses import dataclass
 from typing import Any, TypedDict
 
@@ -59,6 +60,17 @@ class PatientProfile:
     pain_level: int
     history: str
     symptoms: str
+
+    def as_context(self) -> dict[str, Any]:
+        """The patient_context block this profile becomes."""
+        return {
+            "age": self.age,
+            "gender": self.gender,
+            "bmi": self.bmi,
+            "pain_level": self.pain_level,
+            "history": self.history,
+            "symptoms": self.symptoms,
+        }
 
 
 PROFILES: tuple[PatientProfile, ...] = (
@@ -190,14 +202,7 @@ def build_payloads() -> list[PayloadCase]:
                     "grade": grade,
                     "confidence": confidence,
                     "positive_labels": [],
-                    "patient_context": {
-                        "age": profile.age,
-                        "gender": profile.gender,
-                        "bmi": profile.bmi,
-                        "pain_level": profile.pain_level,
-                        "history": profile.history,
-                        "symptoms": profile.symptoms,
-                    },
+                    "patient_context": profile.as_context(),
                 }
             )
 
@@ -220,21 +225,14 @@ def build_payloads() -> list[PayloadCase]:
                             {"name": name, "probability": probability}
                             for name, probability in combo
                         ],
-                        "patient_context": {
-                            "age": profile.age,
-                            "gender": profile.gender,
-                            "bmi": profile.bmi,
-                            "pain_level": profile.pain_level,
-                            "history": profile.history,
-                            "symptoms": profile.symptoms,
-                        },
+                        "patient_context": profile.as_context(),
                     }
                 )
 
     return payloads
 
 
-def write_payloads(path=EVAL_PAYLOADS_PATH) -> int:
+def write_payloads(path: Path = EVAL_PAYLOADS_PATH) -> int:
     """Write the set as formatted JSON. Returns the number of cases."""
     payloads = build_payloads()
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -246,7 +244,7 @@ def write_payloads(path=EVAL_PAYLOADS_PATH) -> int:
     return len(payloads)
 
 
-def load_payloads(path=EVAL_PAYLOADS_PATH) -> list[PayloadCase]:
+def load_payloads(path: Path = EVAL_PAYLOADS_PATH) -> list[PayloadCase]:
     """Read the committed set, falling back to generating it if absent."""
     if not path.is_file():
         return build_payloads()

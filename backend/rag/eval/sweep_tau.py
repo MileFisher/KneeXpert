@@ -39,6 +39,8 @@ class SweepRow:
     cases: int
     mean_attempts: float
     mean_served_groundedness: float | None
+    regenerated: int
+    """Cases that needed more than one attempt. Counted, not inferred."""
 
     @property
     def serve_rate(self) -> float:
@@ -50,10 +52,12 @@ class SweepRow:
 
     @property
     def regeneration_rate(self) -> float:
-        """Share of cases that needed more than one attempt."""
-        if not MAX_RETRIES:
-            return 0.0
-        return max(0.0, (self.mean_attempts - 1.0) / MAX_RETRIES)
+        """Share of cases that needed more than one attempt.
+
+        Counted directly. Deriving it from the mean attempt count measured a
+        different quantity and understated it by up to the retry budget.
+        """
+        return self.regenerated / self.cases if self.cases else 0.0
 
 
 def load_runs(path: Path = RUNS_PATH) -> list[dict]:
@@ -86,6 +90,7 @@ def replay_config(rows: list[dict], config: str, tau: float) -> SweepRow:
         by_case.setdefault(row["case_id"], []).append(row)
 
     served = 0
+    regenerated = 0
     attempts_used: list[int] = []
     served_scores: list[float] = []
 
@@ -100,6 +105,8 @@ def replay_config(rows: list[dict], config: str, tau: float) -> SweepRow:
                 accepted = row
                 break
         attempts_used.append(used)
+        if used > 1:
+            regenerated += 1
         if accepted is not None:
             served += 1
             served_scores.append(float(accepted["groundedness"]))
@@ -114,6 +121,7 @@ def replay_config(rows: list[dict], config: str, tau: float) -> SweepRow:
         mean_served_groundedness=(
             sum(served_scores) / len(served_scores) if served_scores else None
         ),
+        regenerated=regenerated,
     )
 
 
@@ -144,16 +152,30 @@ def config_summary(rows: list[dict], config: str) -> dict[str, float | int | Non
         values = [r[key] for r in first if r.get(key) is not None]
         return sum(values) / len(values) if values else None
 
+    def percentile(key: str, fraction: float) -> float | None:
+        values = sorted(r[key] for r in first if r.get(key) is not None)
+        if not values:
+            return None
+        index = min(len(values) - 1, int(round(fraction * (len(values) - 1))))
+        return float(values[index])
+
     failures = [r for r in first if r.get("failure")]
     prose = [r for r in first if r.get("parse_mode") == "prose_fallback"]
     return {
         "cases": len(first),
+        # All three RAG Triad dimensions. context_relevance is None for the
+        # ungrounded arm, where it is undefined rather than zero.
+        "context_relevance": mean("context_relevance"),
+        "answer_relevance": mean("answer_relevance"),
         "groundedness": mean("groundedness"),
         "synthesis_groundedness": mean("synthesis_groundedness"),
         "next_steps_groundedness": mean("next_steps_groundedness"),
         "citation_agreement_rate": mean("citation_agreement_rate"),
         "generation_ms": mean("generation_ms"),
         "gate_ms": mean("gate_ms"),
+        "generation_ms_p50": percentile("generation_ms", 0.50),
+        "generation_ms_p95": percentile("generation_ms", 0.95),
+        "gate_ms_p95": percentile("gate_ms", 0.95),
         "failure_rate": len(failures) / len(first),
         "prose_fallback_rate": len(prose) / len(first),
     }

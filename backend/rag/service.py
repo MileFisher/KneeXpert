@@ -59,7 +59,7 @@ class CorpusNotIndexed(RuntimeError):
     """No retrieval index is present. A deployment fault, not a runtime condition."""
 
 
-def _to_schema(passages: list[RetrievedPassage]) -> list[PassageSchema]:
+def to_schema(passages: list[RetrievedPassage]) -> list[PassageSchema]:
     """Convert store hits to the response shape.
 
     Fields are listed explicitly rather than splatted from a dict: the two types
@@ -139,13 +139,14 @@ class AttemptResult:
     """
 
     attempt: int
+    retrieval_k: int
     note: ClinicalNote | None
     parse_mode: object | None
     outcome: GateOutcome | None
+    triad: TriadScores | None
     passages: list[PassageSchema]
     generation_ms: int
     gate_ms: int
-    raw: str
     failure: str | None = None
 
 
@@ -154,14 +155,18 @@ def run_attempt(
     passages: list[PassageSchema],
     attempt: int,
     include_passages: bool,
-    revision_hint: str | None,
-    score_gate: bool = True,
+    revision_hint: str | None = None,
 ) -> AttemptResult:
-    """Generate once and, unless told otherwise, score the result.
+    """Generate once, then score the result on all three RAG Triad dimensions.
 
-    ``score_gate`` exists for the ungrounded and no-gate configurations, which
-    still need scores recorded for the results table but must not have the gate
-    influence what is returned.
+    The single implementation of one attempt, used by both callers: the request
+    path stops at the first attempt that passes, while the evaluation runner
+    records every attempt. That difference is a loop policy, not a reason for two
+    copies of the work.
+
+    All three triad dimensions are always computed. Only groundedness gates; the
+    other two are diagnostic, and the evaluation cannot report a per-configuration
+    triad table from rows that never carried them.
     """
     from rag import ollama_client
 
@@ -170,49 +175,61 @@ def run_attempt(
         req, passages, include_passages, revision_hint=revision_hint
     )
 
+    def failed(reason: str, elapsed_ms: int) -> AttemptResult:
+        return AttemptResult(
+            attempt=attempt,
+            retrieval_k=plan.retrieval_k,
+            note=None,
+            parse_mode=None,
+            outcome=None,
+            triad=None,
+            passages=passages,
+            generation_ms=elapsed_ms,
+            gate_ms=0,
+            failure=reason,
+        )
+
     t = time.monotonic()
     try:
         raw = ollama_client.chat(
             messages,
             temperature=plan.temperature,
+            # A fixed seed with an unchanged prompt makes a retry nearly
+            # pointless. Offsetting by the attempt keeps retries independent
+            # while staying reproducible for a given payload.
             seed=GEN_SEED + attempt,
             json_schema=NOTE_JSON_SCHEMA,
         )
     except ollama_client.OllamaTimeout:
-        return AttemptResult(
-            attempt, None, None, None, passages,
-            int((time.monotonic() - t) * 1000), 0, "", failure="timeout",
-        )
+        return failed("timeout", int((time.monotonic() - t) * 1000))
     except ollama_client.OllamaUnavailable:
-        return AttemptResult(
-            attempt, None, None, None, passages,
-            int((time.monotonic() - t) * 1000), 0, "", failure="llm_unavailable",
-        )
+        return failed("llm_unavailable", int((time.monotonic() - t) * 1000))
     generation_ms = int((time.monotonic() - t) * 1000)
 
     note, parse_mode = parse_note(raw)
     if note is None:
-        return AttemptResult(
-            attempt, None, None, None, passages, generation_ms, 0, raw,
-            failure="parse_failed",
-        )
+        return failed("parse_failed", generation_ms)
 
-    gate_ms = 0
-    outcome: GateOutcome | None = None
-    if score_gate:
-        t = time.monotonic()
-        sentences = note_sentences(note.synthesis, note.next_steps)
-        # The patient's own findings join the retrieved passages as premises,
-        # per §2.9's "patient record and retrieved guidelines". Gate-only:
-        # never reported as retrieved, never counted in context relevance.
-        premises = [findings_premise(req), *passages]
-        outcome = evaluate(
-            groundedness(sentences, premises), threshold=GROUNDEDNESS_TAU
-        )
-        gate_ms = int((time.monotonic() - t) * 1000)
+    t = time.monotonic()
+    sentences = note_sentences(note.synthesis, note.next_steps)
+    # The patient's own findings join the retrieved passages as premises, per
+    # §2.9's "patient record and retrieved guidelines". Gate-only: never reported
+    # as retrieved, never counted in context relevance.
+    premises = [findings_premise(req), *passages]
+    outcome = evaluate(groundedness(sentences, premises), threshold=GROUNDEDNESS_TAU)
+    triad = _triad_for(req, note, passages, outcome, include_passages)
+    gate_ms = int((time.monotonic() - t) * 1000)
 
     return AttemptResult(
-        attempt, note, parse_mode, outcome, passages, generation_ms, gate_ms, raw
+        attempt=attempt,
+        retrieval_k=plan.retrieval_k,
+        note=note,
+        parse_mode=parse_mode,
+        outcome=outcome,
+        triad=triad,
+        passages=passages,
+        generation_ms=generation_ms,
+        gate_ms=gate_ms,
     )
 
 
@@ -255,7 +272,7 @@ def generate_clinical_note(
     # flows through the rest of this function. The store's dataclass and the
     # pydantic schema have the same fields, which made them easy to mix up — and
     # duck typing hid it until a typechecker ran.
-    passages = _to_schema(retrieve(req, k=TOP_K))
+    passages = to_schema(retrieve(req, k=TOP_K))
     mark("retrieval", t)
 
     def respond(**kwargs: Any) -> FeedbackGenerateResponse:
@@ -290,66 +307,44 @@ def generate_clinical_note(
         plan = plan_attempt(attempt, MAX_RETRIES)
 
         # Re-retrieval on the final attempt happens in every configuration, so
-        # the premise set is never a function of which config is running — see
-        # _retrieval_ks_for_attempt.
+        # the premise set is never a function of which config is running.
         if plan.retrieval_k != TOP_K:
-            passages = _to_schema(retrieve(req, k=plan.retrieval_k))
+            passages = to_schema(retrieve(req, k=plan.retrieval_k))
 
-        messages = build_messages(
+        result = run_attempt(
             req,
             passages,
+            attempt,
             include_passages,
             revision_hint=revision if plan.include_revision_hint else None,
         )
+        generation_ms += result.generation_ms
+        gate_ms += result.gate_ms
+        latency["generation"] = generation_ms
 
-        t = time.monotonic()
-        try:
-            raw = ollama_client.chat(
-                messages,
-                temperature=plan.temperature,
-                # A fixed seed with an unchanged prompt makes a retry nearly
-                # pointless. Offsetting by the attempt keeps retries independent
-                # while staying reproducible for a given payload.
-                seed=GEN_SEED + attempt,
-                json_schema=NOTE_JSON_SCHEMA,
+        if result.failure in ("timeout", "llm_unavailable"):
+            return respond(
+                fallback_reason=result.failure,  # type: ignore[arg-type]
+                gate_attempts=attempts,
             )
-        except ollama_client.OllamaTimeout:
-            generation_ms += int((time.monotonic() - t) * 1000)
-            latency["generation"] = generation_ms
-            return respond(fallback_reason="timeout", gate_attempts=attempts)
-        except ollama_client.OllamaUnavailable:
-            generation_ms += int((time.monotonic() - t) * 1000)
-            latency["generation"] = generation_ms
-            return respond(fallback_reason="llm_unavailable", gate_attempts=attempts)
-        generation_ms += int((time.monotonic() - t) * 1000)
-
-        note, parse_mode = parse_note(raw)
-        if note is None:
+        if result.note is None:
             continue
 
-        # ── Safety gate ──────────────────────────────────────────────────────
-        t = time.monotonic()
-        sentences = note_sentences(note.synthesis, note.next_steps)
-        # The patient's own findings join the retrieved passages as premises,
-        # per §2.9's "patient record and retrieved guidelines". Gate-only:
-        # never reported as retrieved, never counted in context relevance.
-        premises = [findings_premise(req), *passages]
-        scores = groundedness(sentences, premises)
-        outcome = evaluate(scores, threshold=GROUNDEDNESS_TAU)
-        gate_ms += int((time.monotonic() - t) * 1000)
+        outcome = result.outcome
+        assert outcome is not None  # a parsed note is always scored
         last_outcome = outcome
-
-        latency["generation"] = generation_ms
         latency["gate"] = gate_ms
 
         if outcome.passed or not gate_enabled:
             return respond(
-                clinical_note=_with_sentence_scores(note, scores),
+                clinical_note=_with_sentence_scores(
+                    result.note, outcome.sentence_scores
+                ),
                 generated_by=f"{OLLAMA_MODEL} via Ollama",
                 gate_attempts=attempts,
-                parse_mode=parse_mode,
+                parse_mode=result.parse_mode,
                 grounding_score=outcome.groundedness,
-                triad=_triad_for(req, note, passages, outcome, include_passages),
+                triad=result.triad,
             )
 
         # Name the failing sentences verbatim for the next attempt: a quoted

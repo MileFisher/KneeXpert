@@ -90,7 +90,15 @@ NLI_BATCH_SIZE = 16
 NLI_MAX_LENGTH = 384
 NLI_PREMISE_TOP_N = 3  # per sentence, pre-filtered by embedding cosine
 
-GROUNDEDNESS_TAU = float(os.getenv("RAG_TAU", "0.70"))
+# PROVISIONAL. 0.70 was picked before any measurement and rejected every note,
+# including well-grounded ones. Measured on the current corpus a grounded note
+# scores 0.698 and a deliberately fabricated one 0.026, so any threshold between
+# them separates the two; 0.60 leaves margin on both sides.
+#
+# This is tuned against a handful of examples and should not be reported as a
+# chosen operating point. The defensible value comes from the Phase 4 sweep over
+# the full payload set, replayed offline against stored per-sentence scores.
+GROUNDEDNESS_TAU = float(os.getenv("RAG_TAU", "0.60"))
 MAX_RETRIES = 2  # 3 attempts total
 
 # Attempt -> temperature. Attempt 3 also re-retrieves at TOP_K_RETRY.

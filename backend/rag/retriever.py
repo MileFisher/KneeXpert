@@ -15,6 +15,34 @@ from rag.store import RetrievedPassage, get_store
 
 MODALITY_PHRASE = {"xray": "on radiography", "mri": "on MRI"}
 
+KL_GRADING_SOURCE_ID = "kl-grading"
+"""The internal KL reference document, whose sections are looked up by grade."""
+
+
+def grade_section_for(grade: int) -> str:
+    """Section name holding the definition of one KL grade.
+
+    Mirrors the headings in corpus/internal/kl-grading.md. The em dash matters:
+    it is the exact section path the chunker recorded.
+    """
+    return f"Grade {grade} — {GRADE_LABEL.get(grade, 'Unknown')}"
+
+
+def pinned_passages(req: FeedbackGenerateRequest) -> list[RetrievedPassage]:
+    """Passages whose relevance follows from the payload, not from similarity.
+
+    Currently the definition of the predicted KL grade. Measured against a
+    grade-3 query, the Grade 3 chunk scored 0.795 and Grade 0 scored 0.764 - a
+    0.031 spread across eight sections sharing their vocabulary and a context
+    header worth a fifth of each chunk. Dense retrieval cannot separate them, and
+    does not need to: the grade is a structured field, so the matching definition
+    is fetched by key.
+    """
+    passage = get_store().get_by_section(
+        KL_GRADING_SOURCE_ID, grade_section_for(req.grade)
+    )
+    return [passage] if passage is not None else []
+
 
 def build_query(req: FeedbackGenerateRequest) -> str:
     """Render the payload as one clinical sentence.
@@ -81,4 +109,15 @@ def retrieve(req: FeedbackGenerateRequest, k: int = TOP_K) -> list[RetrievedPass
     store = get_store()
     vector = get_embedder().embed_query(build_query(req))
     hits = store.search(vector, k=k * MAX_CHUNKS_PER_ARTICLE + k)
-    return _cap_per_source(hits, MAX_CHUNKS_PER_ARTICLE)[:k]
+    ranked = _cap_per_source(hits, MAX_CHUNKS_PER_ARTICLE)
+
+    # Pinned passages lead, then dense hits fill the remainder. Deduplicated so a
+    # pinned chunk that search also found is not counted twice.
+    pinned = pinned_passages(req)
+    seen = {p.passage_id for p in pinned}
+    merged = list(pinned)
+    for hit in ranked:
+        if hit.passage_id not in seen:
+            seen.add(hit.passage_id)
+            merged.append(hit)
+    return merged[:k]

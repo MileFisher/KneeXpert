@@ -169,6 +169,52 @@ class VectorStore:
             )
         return passages
 
+    def get_by_section(
+        self, source_id: str, section_path: str
+    ) -> RetrievedPassage | None:
+        """Fetch one chunk by exact source and section, bypassing similarity.
+
+        For content whose relevance is known from structured data rather than
+        from a query — the definition of the grade the model just predicted, for
+        instance. Dense search cannot reliably separate near-identical sections,
+        and it should not have to when the answer is already known.
+        """
+        self.load()
+        assert self.client is not None
+        if not self.client.collection_exists(self.collection):
+            return None
+        from qdrant_client.models import FieldCondition, Filter, MatchValue
+
+        hits, _ = self.client.scroll(
+            collection_name=self.collection,
+            scroll_filter=Filter(
+                must=[
+                    FieldCondition(key="source_id", match=MatchValue(value=source_id)),
+                    FieldCondition(
+                        key="section_path", match=MatchValue(value=section_path)
+                    ),
+                ]
+            ),
+            limit=1,
+            with_payload=True,
+        )
+        if not hits:
+            return None
+        payload = hits[0].payload or {}
+        title = payload.get("title", "")
+        section = payload.get("section_path", "")
+        return RetrievedPassage(
+            passage_id=str(payload.get("chunk_id", hits[0].id)),
+            source=f"{title} — {section}" if section else str(title),
+            text=str(payload.get("text", "")),
+            # Pinned by lookup, not scored by similarity. Reported as 1.0 so the
+            # provenance of the score is not mistaken for a retrieval ranking.
+            score=1.0,
+            licence=str(payload.get("licence", "")),
+            source_type=str(payload.get("source_type", "")),
+            url=payload.get("url"),
+        )
+
     def source_type_breakdown(self) -> dict[str, int]:
         """Point count per source type, so the evaluation can report the corpus mix."""
         self.load()

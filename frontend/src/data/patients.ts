@@ -68,8 +68,56 @@ export interface PatientReport {
   doctorConfirmed: boolean;
   doctorOverride: boolean;
   overrideNotes?: string;
+  /**
+   * AI-generated clinical notes, at most one per modality (latest wins).
+   *
+   * An array rather than a single field because a note is per-study while the
+   * report is per-patient: a single field would lose the X-ray note when the MRI
+   * is analysed. Mirrors `modalitySnapshots` above, which solves the same
+   * problem on this type.
+   */
+  clinicalNotes?: SignedClinicalNote[];
   updatedAt: string;
   version: number;
+}
+
+export type NoteReviewStatus = "pending" | "accepted" | "edited" | "rejected";
+
+/**
+ * An AI-generated clinical note and the clinician's verdict on it.
+ *
+ * `generatedText` is never mutated. A clinician's edit goes in `reviewedText`,
+ * so it stays possible to show what the model wrote alongside what was actually
+ * approved — which is what makes the human-in-the-loop claim auditable rather
+ * than merely asserted.
+ */
+export interface SignedClinicalNote {
+  noteId: string;
+  modality: Modality;
+  /** Verbatim model output. Never edited. */
+  generatedText: string;
+  /** Clinician's revision. Only set when `status` is "edited". */
+  reviewedText?: string;
+  nextSteps: string[];
+  status: NoteReviewStatus;
+  /** 0–1 entailment score, or null when the note was withheld. */
+  groundingScore: number | null;
+  gateAttempts: number;
+  /** Why the note was withheld, when it was. */
+  fallbackReason: string | null;
+  /** Model and host, e.g. "meditron3-8b via Ollama". Null when withheld. */
+  generatedBy: string | null;
+  citations: NoteCitation[];
+  generatedAt: string;
+  reviewedBy?: string;
+  reviewedAt?: string;
+  rejectionReason?: string;
+}
+
+export interface NoteCitation {
+  passageId: string;
+  source: string;
+  url?: string | null;
 }
 
 export interface Patient {

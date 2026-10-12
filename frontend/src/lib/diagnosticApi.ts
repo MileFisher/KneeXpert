@@ -239,6 +239,126 @@ export type BackboneHealth = {
       mri_per_study_max: MriStudyCost;
     };
   };
+
+  /**
+   * Clinical-note layer readiness. All optional: a backend without the layer
+   * deployed simply omits them.
+   */
+  /** An on-disk vector index exists. False means `python -m rag.ingest` has not run. */
+  rag_index_ready?: boolean;
+  rag_index_path?: string;
+  /** Passages in the committed corpus. */
+  rag_chunk_count?: number;
+  /**
+   * Whether each local model is already in the HuggingFace cache. False means the
+   * first note request will stall on a download — worth checking before a demo.
+   */
+  rag_models_cached?: { embedder: boolean; nli: boolean };
+  rag_models_ready?: boolean;
+  /** The generation host answered. Probed with a short timeout and cached server-side. */
+  llm_available?: boolean;
+  /** Configured model tag, present whether or not the host is reachable. */
+  llm_model?: string;
+  /** The host is reachable AND has `llm_model` pulled. */
+  llm_model_present?: boolean;
+  llm_base_url?: string;
+  /** Why the probe failed, when it did. Null when the host answered. */
+  llm_error?: string | null;
+};
+
+// ── Clinical note (RAG-grounded) ─────────────────────────────────────────────
+// Mirrors backend/rag/schemas.py. Additive: FeedbackBundle above is unchanged.
+
+/** Imaging modality, as the backend names it. */
+export type NoteModality = "xray" | "mri";
+
+export type ClinicalNoteConfig = "ungrounded" | "rag_no_gate" | "rag_gate";
+
+export type ClinicalNoteFallbackReason =
+  | "llm_unavailable"
+  | "timeout"
+  | "gate_rejected"
+  | "parse_failed"
+  | "empty_corpus";
+
+export type ClinicalNoteParseMode = "json" | "prose_fallback";
+
+export type ClinicalNotePatientContext = {
+  age?: number;
+  gender?: string;
+  bmi?: number;
+  pain_level?: number;
+  history?: string;
+  symptoms?: string;
+};
+
+export type ClinicalNoteRequest = {
+  modality: NoteModality;
+  grade: number;
+  /** Percentage, 0–100. */
+  confidence: number;
+  /** MRI only; probabilities are percentages. */
+  positive_labels?: { name: string; probability: number }[];
+  patient_context?: ClinicalNotePatientContext;
+  config?: ClinicalNoteConfig;
+};
+
+export type RetrievedPassage = {
+  passage_id: string;
+  source: string;
+  text: string;
+  score: number;
+  licence: string;
+  /** "pmc" for published literature, "internal" for project reference docs. */
+  source_type: string;
+  url?: string | null;
+};
+
+export type NoteSentence = {
+  text: string;
+  /** 0–1 entailment probability against the best-supporting passage. */
+  groundedness: number;
+  label: "entailment" | "neutral" | "contradiction";
+  /**
+   * Derived from the entailment model, not from the marker the model wrote, so
+   * it cannot be fabricated.
+   */
+  supporting_passage_id?: string | null;
+  /** The `[n]` the model itself cited, kept for comparison. */
+  cited_marker?: number | null;
+};
+
+export type TriadScores = {
+  /** Null — not zero — for the ungrounded config, where it is undefined. */
+  context_relevance: number | null;
+  answer_relevance: number;
+  groundedness: number;
+};
+
+export type ClinicalNote = {
+  synthesis: string;
+  next_steps: string[];
+  sentences: NoteSentence[];
+};
+
+export type ClinicalNoteResponse = {
+  /**
+   * Null when the note was withheld — see `fallback_reason`. Never substituted
+   * with deterministic `FeedbackBundle` text: the backend has no static note
+   * variant, so a null here always means no model output was served.
+   */
+  clinical_note: ClinicalNote | null;
+  generated_by: string | null;
+  grounding_score: number | null;
+  triad: TriadScores | null;
+  /** Populated even when the note is withheld. */
+  retrieved_passages: RetrievedPassage[];
+  gate_attempts: number;
+  gate_threshold: number;
+  fallback_reason: ClinicalNoteFallbackReason | null;
+  parse_mode: ClinicalNoteParseMode | null;
+  latency_ms: Record<string, number>;
+  config: ClinicalNoteConfig;
 };
 
 function postFormWithProgress<T>(
@@ -355,4 +475,32 @@ export function gradcamToDataUrl(base64: string | null | undefined): string | nu
 export function pngBase64ToDataUrl(base64: string | null | undefined): string | null {
   if (!base64) return null;
   return `data:image/png;base64,${base64}`;
+}
+
+/**
+ * Generate a RAG-grounded clinical note for one diagnostic result.
+ *
+ * A 200 with `clinical_note: null` is a normal outcome, not an error: the note
+ * was withheld and `fallback_reason` says why. Only a genuine HTTP failure
+ * throws, matching this module's convention.
+ */
+export async function generateClinicalNote(
+  req: ClinicalNoteRequest,
+  signal?: AbortSignal,
+): Promise<ClinicalNoteResponse> {
+  const res = await fetch(`${API_BASE}/api/feedback/generate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(req),
+    signal,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(
+      typeof err.detail === "string" ? err.detail : "Clinical note generation failed",
+    );
+  }
+
+  return res.json() as Promise<ClinicalNoteResponse>;
 }

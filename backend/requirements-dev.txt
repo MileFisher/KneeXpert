@@ -1,0 +1,5 @@
+# Dev-only; NOT installed into the Docker image.
+-r requirements.txt
+
+pytest>=8.0.0
+matplotlib>=3.8.0   # rag/eval/sweep_tau.py figure only

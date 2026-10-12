@@ -17,6 +17,9 @@ from mri.pipeline import mri_models_available, predict_mri
 from xray import DEFAULT_ENSEMBLE_MODELS, MODELS_CONFIG, ModelLoader, all_available_model_ids
 from feedback_engine import generate_feedback
 from model_profiler import get_all_flops, get_model_flops_for_response
+from rag.schemas import FeedbackGenerateRequest, FeedbackGenerateResponse
+from rag.service import CorpusNotIndexed, generate_clinical_note
+from rag.status import rag_health
 
 app = FastAPI(title="KneeXpert Backbone API", version="1.0.0")
 
@@ -58,7 +61,42 @@ async def health_check():
         "mri_sample_filename": SAMPLE_MRI_PATH.name if SAMPLE_MRI_PATH.is_file() else None,
         "mri_label_summary_available": LABEL_SUMMARY_PATH.is_file(),
         "model_flops": flops_data,
+        # Clinical-note layer. The LLM probe is async with a short timeout and a
+        # TTL cache so a powered-off generation host cannot stall this endpoint.
+        **await rag_health(),
     }
+
+
+@app.post("/api/feedback/generate", response_model=FeedbackGenerateResponse)
+def generate_feedback_note(payload: FeedbackGenerateRequest) -> JSONResponse:
+    """Generate a RAG-grounded clinical note for one diagnostic result.
+
+    Deliberately ``def`` and not ``async def``. Every other route here is async
+    and finishes in seconds; this one blocks for tens of seconds on generation
+    and entailment scoring. A plain ``def`` makes FastAPI run it in the
+    threadpool, so ``/health`` and in-flight predictions stay responsive.
+
+    Status codes split by *who has to fix it*:
+
+    * **503** — a deployment fault an operator must act on (no retrieval index).
+    * **200 with ``clinical_note: null`` and a ``fallback_reason``** — a runtime
+      condition the UI has to render: the generation host is unreachable, it
+      timed out, the note could not be grounded, or its output would not parse.
+      Returning 503 for these would force the frontend to guess which happened.
+    """
+    try:
+        result = generate_clinical_note(payload)
+        return JSONResponse(content=result.model_dump())
+    except HTTPException:
+        raise
+    except CorpusNotIndexed as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except FileNotFoundError as e:
+        raise HTTPException(status_code=503, detail=str(e)) from e
+    except Exception as e:
+        raise HTTPException(
+            status_code=500, detail=f"Clinical note generation error: {e}"
+        ) from e
 
 
 @app.get("/api/mri/categories")

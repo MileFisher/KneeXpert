@@ -1,0 +1,93 @@
+[
+  {
+    "doi": "10.3390/jcm12206434",
+    "journal": "Journal of Clinical Medicine",
+    "licence_ref": "https://creativecommons.org/licenses/by/4.0/",
+    "licence_source": "license-p/ext-link",
+    "oa_bucket": "cc by",
+    "pmcid": "PMC10607427",
+    "retrieved_at": "2026-10-12T08:12:16+00:00",
+    "sha256": "d8b47cf5821cef38bc62be35ae74b9afa00ab9ad595a2311f080406b5170e706",
+    "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC10607427/",
+    "title": "Knee Cartilage Lesion Management—Current Trends in Clinical Practice",
+    "year": "2023"
+  },
+  {
+    "doi": "10.1186/1471-2474-9-116",
+    "journal": "BMC Musculoskeletal Disorders",
+    "licence_ref": "https://creativecommons.org/licenses/by/2.0/",
+    "licence_source": "license-p/ext-link",
+    "oa_bucket": "cc by",
+    "pmcid": "PMC2542996",
+    "retrieved_at": "2026-10-12T08:12:13+00:00",
+    "sha256": "feed802e7cc5613fa45bfd59e45e46acd230371e1e76d3ac38372e629b8e8dd1",
+    "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC2542996/",
+    "title": "The discordance between clinical and radiographic knee osteoarthritis: A systematic search and summary of the literature",
+    "year": "2008"
+  },
+  {
+    "doi": "10.1038/srep22365",
+    "journal": "Scientific Reports",
+    "licence_ref": "https://creativecommons.org/licenses/by/4.0/",
+    "licence_source": "license-p/ext-link",
+    "oa_bucket": "cc by",
+    "pmcid": "PMC4772126",
+    "retrieved_at": "2026-10-12T08:12:18+00:00",
+    "sha256": "6989434441c7c1f5ad1695f051d35187e228b79cba97cfdc39f9eb6b1519c032",
+    "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC4772126/",
+    "title": "Comparison of Diagnostic Performance of Semi-Quantitative Knee Ultrasound and Knee Radiography with MRI: Oulu Knee Osteoarthritis Study",
+    "year": "2016"
+  },
+  {
+    "doi": "10.1038/s41598-018-20132-7",
+    "journal": "Scientific Reports",
+    "licence_ref": "https://creativecommons.org/licenses/by/4.0/",
+    "licence_source": "license-p/ext-link",
+    "oa_bucket": "cc by",
+    "pmcid": "PMC5789045",
+    "retrieved_at": "2026-10-12T08:12:12+00:00",
+    "sha256": "4d23dfca9b2cbc5fe574765d03d770a23f83f9737266b7bcf2f6ebc23b9a9d69",
+    "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC5789045/",
+    "title": "Automatic Knee Osteoarthritis Diagnosis from Plain Radiographs: A Deep Learning-Based Approach",
+    "year": "2018"
+  },
+  {
+    "doi": "10.1155/2019/2165918",
+    "journal": "Mediators of Inflammation",
+    "licence_ref": "https://creativecommons.org/licenses/by/4.0/",
+    "licence_source": "ali:license_ref",
+    "oa_bucket": "cc by",
+    "pmcid": "PMC6754937",
+    "retrieved_at": "2026-10-12T08:12:19+00:00",
+    "sha256": "92da68279322f6feb43931d97ac37f4a4569ac100e0008bfda1a25ab0ccb626a",
+    "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6754937/",
+    "title": "Inhibition of Synovial Macrophage Pyroptosis Alleviates Synovitis and Fibrosis in Knee Osteoarthritis",
+    "year": "2019"
+  },
+  {
+    "doi": "10.1186/s12891-019-2895-3",
+    "journal": "BMC Musculoskeletal Disorders",
+    "licence_ref": "https://creativecommons.org/licenses/by/4.0/",
+    "licence_source": "license-p/ext-link",
+    "oa_bucket": "cc by",
+    "pmcid": "PMC6815415",
+    "retrieved_at": "2026-10-12T08:12:14+00:00",
+    "sha256": "061dd229780963c55055d9d51a46778cec8cc4aa15089a6c485b038f9f089ae7",
+    "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC6815415/",
+    "title": "Global management of patients with knee osteoarthritis begins with quality of life assessment: a systematic review",
+    "year": "2019"
+  },
+  {
+    "doi": "10.7759/cureus.25121",
+    "journal": "Cureus",
+    "licence_ref": "https://creativecommons.org/licenses/by/3.0/",
+    "licence_source": "ali:license_ref",
+    "oa_bucket": "cc by",
+    "pmcid": "PMC9205760",
+    "retrieved_at": "2026-10-12T08:12:15+00:00",
+    "sha256": "8614b5b1dd93060441d48b4a27a183e6ed93fa01ec637c414380b3633b36aa50",
+    "source_url": "https://www.ncbi.nlm.nih.gov/pmc/articles/PMC9205760/",
+    "title": "Meniscus Tear: Pathology, Incidence, and Management",
+    "year": "2022"
+  }
+]

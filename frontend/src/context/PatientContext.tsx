@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { applyNoteSignOff } from "@/lib/clinicalNote";
 import {
   mockPatients,
   type Modality,
@@ -6,6 +7,7 @@ import {
   type Patient,
   type PatientReport,
   type ReportModelSnapshot,
+  type SignedClinicalNote,
 } from "@/data/patients";
 import { loadPatients, savePatients } from "@/lib/patientStorage";
 
@@ -81,6 +83,7 @@ interface PatientContextValue {
   addPatient: (input: NewPatientInput) => string;
   applyAnalysisResult: (patientId: string, payload: ApplyAnalysisPayload) => void;
   confirmDiagnosis: (patientId: string, payload: ConfirmDiagnosisPayload) => void;
+  signOffClinicalNote: (patientId: string, note: SignedClinicalNote) => void;
 }
 
 const PatientContext = createContext<PatientContextValue | null>(null);
@@ -238,9 +241,43 @@ export function PatientProvider({ children }: { children: ReactNode }) {
     );
   }, []);
 
+  /**
+   * Record a clinician's verdict on an AI-generated clinical note.
+   *
+   * A separate action from `confirmDiagnosis` on purpose: accepting management
+   * advice and agreeing with a severity grade are independent clinical
+   * judgements, and a physician may well do one without the other. Both write
+   * into the same `report` object, so there is still one source of truth.
+   */
+  const signOffClinicalNote = useCallback(
+    (patientId: string, note: SignedClinicalNote) => {
+      setPatients(prev =>
+        prev.map(p => {
+          if (p.id !== patientId || !p.report) return p;
+          return { ...p, report: applyNoteSignOff(p.report, note) };
+        }),
+      );
+    },
+    [],
+  );
+
   const value = useMemo(
-    () => ({ patients, getPatient, addPatient, applyAnalysisResult, confirmDiagnosis }),
-    [patients, getPatient, addPatient, applyAnalysisResult, confirmDiagnosis],
+    () => ({
+      patients,
+      getPatient,
+      addPatient,
+      applyAnalysisResult,
+      confirmDiagnosis,
+      signOffClinicalNote,
+    }),
+    [
+      patients,
+      getPatient,
+      addPatient,
+      applyAnalysisResult,
+      confirmDiagnosis,
+      signOffClinicalNote,
+    ],
   );
 
   return <PatientContext.Provider value={value}>{children}</PatientContext.Provider>;

@@ -31,6 +31,21 @@ pnpm-debug.log*
 .env.*
 !.env.example
 
+# === docs/ (local working notes and plaintext credentials — never committed) ===
+# Nothing in docs/ is tracked. It holds local credentials plus design and planning
+# documents that are deliberately kept off a public remote. Back them up outside
+# the working tree — a `git clean -xfd` will delete them without warning.
+docs/
+
+# === RAG vector index (binary Qdrant segments — rebuilt by `python -m rag.ingest`) ===
+backend/rag/index/
+
+# === Evaluation output ===
+# Smoke-test runs and plots are disposable. Real ablation results are a
+# research artifact and should be committed deliberately, with the force
+# flag and a commit message saying which model and corpus produced them.
+backend/rag/eval/results/
+
 # === Model checkpoints (kept local, never committed) ===
 **/models/*
 !**/models/

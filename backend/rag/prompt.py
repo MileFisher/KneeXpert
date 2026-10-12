@@ -109,6 +109,49 @@ def _findings_block(req: FeedbackGenerateRequest) -> list[str]:
     return lines
 
 
+def render_findings_premise(req: FeedbackGenerateRequest) -> str:
+    """The findings and patient blocks as flowing prose.
+
+    Reused as an entailment premise so the gate can verify statements about this
+    patient, not only statements about the literature. Rendered as sentences
+    rather than the prompt's bullet layout, because an entailment model reads
+    prose far better than a list.
+    """
+    parts = [
+        f"This study is a {MODALITY_LABEL[req.modality].split(' (')[0]} of the knee.",
+        f"The Kellgren-Lawrence grade is {req.grade} "
+        f"({GRADE_LABEL.get(req.grade, 'unknown')}).",
+        f"Model confidence is {req.confidence:.1f} percent"
+        f"{_confidence_hint(req.confidence)}.",
+    ]
+    if req.modality == "mri" and req.positive_labels:
+        named = ", ".join(
+            f"{label.name} at {label.probability:.1f} percent probability"
+            for label in sorted_labels(req)
+        )
+        parts.append(f"The following findings are positive: {named}.")
+
+    ctx = req.patient_context
+    if ctx is not None:
+        facts = []
+        if ctx.age is not None:
+            facts.append(f"aged {ctx.age}")
+        if ctx.gender:
+            facts.append(str(ctx.gender).lower())
+        if ctx.bmi is not None:
+            facts.append(f"with a BMI of {ctx.bmi:.1f}")
+        if ctx.pain_level is not None:
+            facts.append(f"reporting pain {ctx.pain_level} out of 10")
+        if facts:
+            parts.append("The patient is " + " ".join(facts) + ".")
+        if ctx.history:
+            parts.append(f"History: {ctx.history}")
+        if ctx.symptoms:
+            parts.append(f"Symptoms: {ctx.symptoms}")
+
+    return " ".join(parts)
+
+
 def _patient_block(req: FeedbackGenerateRequest) -> list[str]:
     ctx = req.patient_context
     if ctx is None:

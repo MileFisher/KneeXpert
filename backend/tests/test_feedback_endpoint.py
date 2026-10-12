@@ -52,6 +52,34 @@ def client() -> TestClient:
 
 
 @pytest.fixture
+def pass_gate(monkeypatch):
+    """Make the safety gate accept whatever it is given.
+
+    Used by tests about endpoint behaviour rather than about grounding. The real
+    cross-encoder is ~740 MB and hundreds of milliseconds per pair, and whether a
+    canned stub note happens to be entailed by the live corpus is not what these
+    tests are checking. Gate behaviour itself is covered by test_gate.py and
+    test_gate_integration.py.
+    """
+    from rag.gate import SentenceScore
+
+    monkeypatch.setattr(
+        "rag.service.groundedness",
+        lambda sentences, premises: [
+            SentenceScore(
+                text=text,
+                sentence_class=cls,
+                groundedness=0.95,
+                label="entailment",
+                supporting_passage_id="kl-grading#00-00",
+            )
+            for text, cls in sentences
+        ],
+    )
+    monkeypatch.setattr("rag.service.answer_relevance", lambda q, a: 0.82)
+
+
+@pytest.fixture
 def fake_llm(monkeypatch):
     """Replace only the generation host. Everything else stays real."""
 
@@ -74,7 +102,9 @@ def fake_llm(monkeypatch):
 # ── Happy path ────────────────────────────────────────────────────────────────
 
 
-def test_returns_a_note_with_real_retrieved_passages(client, fake_llm) -> None:
+def test_returns_a_note_with_real_retrieved_passages(
+    client, fake_llm, pass_gate
+) -> None:
     fake_llm(raw=GROUNDED_JSON)
     r = client.post("/api/feedback/generate", json=MRI_PAYLOAD)
     assert r.status_code == 200
@@ -92,7 +122,7 @@ def test_returns_a_note_with_real_retrieved_passages(client, fake_llm) -> None:
     assert passage["text"] and passage["licence"] and passage["source"]
 
 
-def test_xray_payload_needs_no_labels(client, fake_llm) -> None:
+def test_xray_payload_needs_no_labels(client, fake_llm, pass_gate) -> None:
     fake_llm(raw=GROUNDED_JSON)
     r = client.post(
         "/api/feedback/generate",
@@ -151,7 +181,9 @@ def test_withheld_note_never_carries_deterministic_feedback_text(
     assert body["generated_by"] is None
 
 
-def test_malformed_prose_is_tolerated_rather_than_discarded(client, fake_llm) -> None:
+def test_malformed_prose_is_tolerated_rather_than_discarded(
+    client, fake_llm, pass_gate
+) -> None:
     fake_llm(raw="The knee shows moderate degenerative change.")
     body = client.post("/api/feedback/generate", json=MRI_PAYLOAD).json()
     assert body["clinical_note"] is not None
@@ -177,7 +209,9 @@ def test_invalid_payloads_are_rejected(client, bad) -> None:
 # ── Configuration plumbing ────────────────────────────────────────────────────
 
 
-def test_ungrounded_config_still_retrieves_passages(client, fake_llm) -> None:
+def test_ungrounded_config_still_retrieves_passages(
+    client, fake_llm, pass_gate
+) -> None:
     """They are scoring premises even when withheld from the prompt.
 
     Without this the ablation is ill-posed: groundedness would have nothing to

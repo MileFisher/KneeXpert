@@ -69,8 +69,33 @@ def test_zero_hits_withholds_the_note_rather_than_demanding_citations(
 # ── Parse provenance is reported ──────────────────────────────────────────────
 
 
+def _stub_gate(monkeypatch, score: float = 0.95) -> None:
+    """Replace entailment scoring with a fixed verdict.
+
+    These tests are about how output was parsed, not about grounding, and the
+    real cross-encoder is ~740 MB and hundreds of milliseconds per pair.
+    """
+    from rag.gate import SentenceScore
+
+    monkeypatch.setattr(
+        "rag.service.groundedness",
+        lambda sentences, passages: [
+            SentenceScore(
+                text=text,
+                sentence_class=cls,
+                groundedness=score,
+                label="entailment",
+                supporting_passage_id="x#00-00",
+            )
+            for text, cls in sentences
+        ],
+    )
+    monkeypatch.setattr("rag.service.answer_relevance", lambda q, a: 0.8)
+
+
 def test_prose_fallback_is_recorded_not_silently_accepted(monkeypatch) -> None:
     """A rising prose-fallback rate is a signal about the model, not a detail."""
+    _stub_gate(monkeypatch)
     from rag import ollama_client, service
     from rag.store import RetrievedPassage, get_store
 
@@ -95,6 +120,7 @@ def test_prose_fallback_is_recorded_not_silently_accepted(monkeypatch) -> None:
 
 
 def test_well_formed_json_is_recorded_as_such(monkeypatch) -> None:
+    _stub_gate(monkeypatch)
     from rag import ollama_client, service
     from rag.store import RetrievedPassage, get_store
 

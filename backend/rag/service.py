@@ -29,11 +29,27 @@ from rag.config import (
     TOP_K,
     TOP_K_RETRY,
 )
-from rag.prompt import NOTE_JSON_SCHEMA, build_messages, parse_note
+from rag.gate import GateOutcome, SentenceScore, evaluate, plan_attempt
+from rag.prompt import (
+    NOTE_JSON_SCHEMA,
+    build_messages,
+    parse_note,
+    revision_hint_for,
+)
+from rag.triad import (
+    answer_relevance,
+    context_relevance,
+    findings_premise,
+    groundedness,
+    note_sentences,
+)
 from rag.schemas import (
+    ClinicalNote,
     FeedbackGenerateRequest,
     FeedbackGenerateResponse,
+    NoteSentence,
     RetrievedPassage as PassageSchema,
+    TriadScores,
 )
 from rag.store import RetrievedPassage
 
@@ -62,6 +78,54 @@ def _to_schema(passages: list[RetrievedPassage]) -> list[PassageSchema]:
         )
         for p in passages
     ]
+
+
+def _with_sentence_scores(
+    note: ClinicalNote, scores: list[SentenceScore]
+) -> ClinicalNote:
+    """Attach per-sentence verdicts to the note the clinician receives.
+
+    The surfaced citation is the entailment-derived passage, not the marker the
+    model wrote. ``cited_marker`` keeps the model's own claim alongside it so the
+    two can be compared, but only the derived one is authoritative: it cannot be
+    fabricated.
+    """
+    return ClinicalNote(
+        synthesis=note.synthesis,
+        next_steps=note.next_steps,
+        sentences=[
+            NoteSentence(
+                text=s.text,
+                groundedness=round(s.groundedness, 4),
+                label=s.label,
+                supporting_passage_id=s.supporting_passage_id,
+                cited_marker=s.cited_marker,
+            )
+            for s in scores
+        ],
+    )
+
+
+def _triad_for(
+    req: FeedbackGenerateRequest,
+    note: ClinicalNote,
+    passages: list[PassageSchema],
+    outcome: GateOutcome,
+    include_passages: bool,
+) -> TriadScores:
+    """All three RAG Triad dimensions. Only groundedness gated the note.
+
+    ``context_relevance`` is None for the ungrounded configuration: no context
+    was supplied, so the metric is undefined rather than zero.
+    """
+    from rag.retriever import build_query
+
+    answer_text = " ".join([note.synthesis, *note.next_steps]).strip()
+    return TriadScores(
+        context_relevance=context_relevance(passages) if include_passages else None,
+        answer_relevance=round(answer_relevance(build_query(req), answer_text), 4),
+        groundedness=round(outcome.groundedness, 4),
+    )
 
 
 def _retrieval_ks_for_attempt(attempt: int, include_passages: bool) -> int:
@@ -126,26 +190,35 @@ def generate_clinical_note(
         return respond(fallback_reason="llm_unavailable")
 
     include_passages = req.config != "ungrounded"
+    gate_enabled = req.config == "rag_gate"
     attempts = 0
-    t = time.monotonic()
+    generation_ms = 0
+    gate_ms = 0
+    last_outcome: GateOutcome | None = None
+    revision: str | None = None
 
     for attempt in range(MAX_RETRIES + 1):
         attempts = attempt + 1
-        temperature = RETRY_TEMPERATURES[min(attempt, len(RETRY_TEMPERATURES) - 1)]
+        plan = plan_attempt(attempt, MAX_RETRIES)
 
-        # The final attempt re-retrieves more widely: if the note could not be
-        # grounded in the original passages, offering the same ones again is the
-        # least likely thing to help. Applied in every configuration -- see
+        # Re-retrieval on the final attempt happens in every configuration, so
+        # the premise set is never a function of which config is running — see
         # _retrieval_ks_for_attempt.
-        wanted_k = _retrieval_ks_for_attempt(attempt, include_passages)
-        if wanted_k != TOP_K:
-            passages = _to_schema(retrieve(req, k=wanted_k))
+        if plan.retrieval_k != TOP_K:
+            passages = _to_schema(retrieve(req, k=plan.retrieval_k))
 
-        messages = build_messages(req, passages, include_passages)
+        messages = build_messages(
+            req,
+            passages,
+            include_passages,
+            revision_hint=revision if plan.include_revision_hint else None,
+        )
+
+        t = time.monotonic()
         try:
             raw = ollama_client.chat(
                 messages,
-                temperature=temperature,
+                temperature=plan.temperature,
                 # A fixed seed with an unchanged prompt makes a retry nearly
                 # pointless. Offsetting by the attempt keeps retries independent
                 # while staying reproducible for a given payload.
@@ -153,26 +226,55 @@ def generate_clinical_note(
                 json_schema=NOTE_JSON_SCHEMA,
             )
         except ollama_client.OllamaTimeout:
-            mark("generation", t)
+            generation_ms += int((time.monotonic() - t) * 1000)
+            latency["generation"] = generation_ms
             return respond(fallback_reason="timeout", gate_attempts=attempts)
         except ollama_client.OllamaUnavailable:
-            mark("generation", t)
+            generation_ms += int((time.monotonic() - t) * 1000)
+            latency["generation"] = generation_ms
             return respond(fallback_reason="llm_unavailable", gate_attempts=attempts)
+        generation_ms += int((time.monotonic() - t) * 1000)
 
         note, parse_mode = parse_note(raw)
         if note is None:
             continue
 
-        mark("generation", t)
-        # Phase 2 inserts the safety gate here. Until then a parsed note is
-        # returned ungated, and `grounding_score` stays None rather than being
-        # filled with a placeholder that would read as a real measurement.
-        return respond(
-            clinical_note=note,
-            generated_by=f"{OLLAMA_MODEL} via Ollama",
-            gate_attempts=attempts,
-            parse_mode=parse_mode,
-        )
+        # ── Safety gate ──────────────────────────────────────────────────────
+        t = time.monotonic()
+        sentences = note_sentences(note.synthesis, note.next_steps)
+        # The patient's own findings join the retrieved passages as premises,
+        # per §2.9's "patient record and retrieved guidelines". Gate-only:
+        # never reported as retrieved, never counted in context relevance.
+        premises = [findings_premise(req), *passages]
+        scores = groundedness(sentences, premises)
+        outcome = evaluate(scores, threshold=GROUNDEDNESS_TAU)
+        gate_ms += int((time.monotonic() - t) * 1000)
+        last_outcome = outcome
 
-    mark("generation", t)
-    return respond(fallback_reason="parse_failed", gate_attempts=attempts)
+        latency["generation"] = generation_ms
+        latency["gate"] = gate_ms
+
+        if outcome.passed or not gate_enabled:
+            return respond(
+                clinical_note=_with_sentence_scores(note, scores),
+                generated_by=f"{OLLAMA_MODEL} via Ollama",
+                gate_attempts=attempts,
+                parse_mode=parse_mode,
+                grounding_score=outcome.groundedness,
+                triad=_triad_for(req, note, passages, outcome, include_passages),
+            )
+
+        # Name the failing sentences verbatim for the next attempt: a quoted
+        # sentence gives the model more to act on than a paraphrased complaint.
+        revision = revision_hint_for(outcome.rejected_sentences)
+
+    latency["generation"] = generation_ms
+    if last_outcome is None:
+        return respond(fallback_reason="parse_failed", gate_attempts=attempts)
+
+    latency["gate"] = gate_ms
+    return respond(
+        fallback_reason="gate_rejected",
+        gate_attempts=attempts,
+        grounding_score=last_outcome.groundedness,
+    )

@@ -194,6 +194,26 @@ def test_truncated_json_degrades_to_prose_rather_than_raising() -> None:
     note, mode = parse_note('{"synthesis": "Grade 3 chan')
     assert note is not None
     assert mode == "prose_fallback"
+    assert "Grade 3 chan" in note.synthesis
+    assert "{" not in note.synthesis
+
+
+def test_parses_unclosed_json_with_runaway_citations() -> None:
+    raw = (
+        '{"synthesis": "The knee shows osteophytes. [1] [2] [3] [4] [5] [6]", '
+        '"next_steps": ["Order MRI. [7] [8] [9] [10] [11] [12] [191]'
+    )
+    note, mode = parse_note(raw)
+    assert note is not None
+    assert "The knee shows osteophytes." in note.synthesis
+    assert "{" not in note.synthesis
+    # excessive consecutive citations collapsed
+    assert "[1] [2]" in note.synthesis
+    # runaway citations beyond threshold filtered
+    assert "[191]" not in note.synthesis
+    assert len(note.next_steps) == 1
+    assert "Order MRI." in note.next_steps[0]
+    assert "[191]" not in note.next_steps[0]
 
 
 def test_json_schema_declares_the_expected_fields() -> None:

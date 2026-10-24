@@ -1,24 +1,35 @@
 import { useId, useState } from "react";
 import {
   AlertTriangle,
+  BookOpen,
   Check,
   ChevronDown,
+  ExternalLink,
   FileText,
   Loader2,
   Pencil,
   RefreshCw,
+  Stethoscope,
   X,
 } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Textarea } from "@/components/ui/textarea";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { groundingBand } from "@/lib/clinicalNote";
+import { GENERAL_MEDICAL_REFERENCES } from "@/lib/medicalReferences";
 import { cn } from "@/lib/utils";
 import type {
   ClinicalNoteFallbackReason,
   ClinicalNoteResponse,
   NoteSentence,
+  PassageSchema,
 } from "@/lib/diagnosticApi";
 import type { NoteReviewStatus } from "@/data/patients";
 
@@ -122,6 +133,86 @@ function NoteAlert({
   );
 }
 
+export function cleanNoteText(rawText: string): string {
+  if (!rawText) return "";
+  let text = rawText.trim();
+
+  // If text starts with '{' or contains '"synthesis":'
+  if (text.startsWith("{") || text.includes('"synthesis":')) {
+    try {
+      const parsed = JSON.parse(text);
+      if (typeof parsed.synthesis === "string") {
+        text = parsed.synthesis;
+      }
+    } catch {
+      // Try regex extracting synthesis string
+      const match = text.match(/"synthesis"\s*:\s*"((?:\\.|[^"\\])*)/);
+      if (match) {
+        text = match[1].replace(/\\n/g, "\n").replace(/\\"/g, '"');
+      } else {
+        // Strip out {"synthesis": " and trailing ,"next_steps"...
+        text = text
+          .replace(/^\s*\{\s*"synthesis"\s*:\s*"?/, "")
+          .replace(/"?\s*,?\s*"next_steps".*$/s, "")
+          .replace(/[\{\}\[\]"]+/g, " ");
+      }
+    }
+  }
+
+  // Collapse 3 or more consecutive citations into at most 2
+  text = text.replace(/(?:\[\d+\]\s*){3,}/g, match => {
+    const citations = match.match(/\[\d+\]/g) || [];
+    const unique = Array.from(new Set(citations));
+    return " " + unique.slice(0, 2).join(" ");
+  });
+
+  return text.trim();
+}
+
+export function extractNextStepsIfMissing(
+  synthesisText: string,
+  currentSteps: string[]
+): { cleanSynthesis: string; steps: string[] } {
+  if (currentSteps && currentSteps.length > 0) {
+    return {
+      cleanSynthesis: cleanNoteText(synthesisText),
+      steps: currentSteps.map(cleanNoteText).filter(Boolean),
+    };
+  }
+
+  if (synthesisText.includes('"next_steps"')) {
+    try {
+      const parsed = JSON.parse(synthesisText);
+      if (Array.isArray(parsed.next_steps) && parsed.next_steps.length > 0) {
+        return {
+          cleanSynthesis: cleanNoteText(parsed.synthesis || synthesisText),
+          steps: parsed.next_steps.map((s: unknown) => cleanNoteText(String(s))).filter(Boolean),
+        };
+      }
+    } catch {
+      const match = synthesisText.match(/"next_steps"\s*:\s*\[(.*)/s);
+      if (match) {
+        const rawSteps = match[1].match(/"([^"\\]*(?:\\.[^"\\]*)*)(?:"|$)/g) || [];
+        const extracted = rawSteps
+          .map(s => s.replace(/^"/, "").replace(/"$/, "").trim())
+          .map(cleanNoteText)
+          .filter(Boolean);
+        if (extracted.length > 0) {
+          return {
+            cleanSynthesis: cleanNoteText(synthesisText),
+            steps: extracted,
+          };
+        }
+      }
+    }
+  }
+
+  return {
+    cleanSynthesis: cleanNoteText(synthesisText),
+    steps: (currentSteps || []).map(cleanNoteText).filter(Boolean),
+  };
+}
+
 /** Per-sentence verdict. The citation shown is the entailed passage, not the
  *  marker the model wrote, so it cannot be fabricated. */
 function SentenceVerdicts({
@@ -132,16 +223,36 @@ function SentenceVerdicts({
   passageNumber: (passageId: string | null | undefined) => number | null;
 }) {
   if (!sentences.length) return null;
+
+  // Filter out raw JSON fragments or empty sentences
+  const validSentences = sentences
+    .map(s => {
+      let cleanText = s.text
+        .replace(/^\s*\{\s*"synthesis"\s*:\s*"?/, "")
+        .replace(/"?\s*,?\s*"next_steps"\s*:\s*\["?/, "")
+        .replace(/["\}\]]+$/g, "")
+        .trim();
+      cleanText = cleanText.replace(/(?:\[\d+\]\s*){3,}/g, match => {
+        const citations = match.match(/\[\d+\]/g) || [];
+        const unique = Array.from(new Set(citations));
+        return " " + unique.slice(0, 2).join(" ");
+      }).trim();
+      return { ...s, text: cleanText };
+    })
+    .filter(s => s.text.length > 5 && !s.text.startsWith('", "'));
+
+  if (!validSentences.length) return null;
+
   return (
     <div className="space-y-1">
       <p className="text-[11px] font-medium text-muted-foreground">
         Per-claim support
       </p>
-      {sentences.map(sentence => {
+      {validSentences.map((sentence, idx) => {
         const number = passageNumber(sentence.supporting_passage_id);
         return (
           <div
-            key={sentence.text}
+            key={idx}
             className="text-[10px] leading-relaxed flex items-start gap-1.5"
           >
             <span
@@ -163,6 +274,98 @@ function SentenceVerdicts({
         );
       })}
     </div>
+  );
+}
+
+/**
+ * Renders clinical synthesis or step text, parsing numeric citation markers
+ * like `[1]`, `[2]` into clickable badges that link directly to the real PubMed Central paper.
+ */
+function FormattedClinicalText({
+  text,
+  passages,
+  onCitationClick,
+}: {
+  text: string;
+  passages?: PassageSchema[];
+  onCitationClick?: (index: number) => void;
+}) {
+  const cleaned = cleanNoteText(text);
+  if (!cleaned) return null;
+
+  const parts = cleaned.split(/(\[\d+\])/g);
+  const maxValidPassage = passages?.length || 6;
+
+  return (
+    <span>
+      {parts.map((part, i) => {
+        const match = part.match(/^\[(\d+)\]$/);
+        if (!match) {
+          return <span key={i}>{part}</span>;
+        }
+
+        const citationNum = parseInt(match[1], 10);
+        // Ignore citations that exceed valid passage range (hallucinations like [191])
+        if (citationNum > maxValidPassage || citationNum < 1) {
+          return null;
+        }
+
+        const passage = passages?.[citationNum - 1];
+        if (!passage) {
+          return (
+            <span
+              key={i}
+              className="inline-flex items-center text-[10px] font-semibold text-primary/80 bg-primary/5 px-1 py-0.5 rounded mx-0.5"
+            >
+              [{citationNum}]
+            </span>
+          );
+        }
+
+        return (
+          <TooltipProvider key={i} delayDuration={150}>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                {passage.url ? (
+                  <a
+                    href={passage.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    className="inline-flex items-center text-[10px] font-semibold text-primary bg-primary/10 hover:bg-primary/25 hover:text-primary px-1 py-0.5 rounded mx-0.5 transition-colors cursor-pointer"
+                    title={`[${citationNum}] ${passage.source}`}
+                  >
+                    [{citationNum}]
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => onCitationClick?.(citationNum - 1)}
+                    className="inline-flex items-center text-[10px] font-semibold text-primary bg-primary/10 hover:bg-primary/25 hover:text-primary px-1 py-0.5 rounded mx-0.5 transition-colors cursor-pointer"
+                    title={`[${citationNum}] ${passage.source}`}
+                  >
+                    [{citationNum}]
+                  </button>
+                )}
+              </TooltipTrigger>
+              <TooltipContent side="top" className="max-w-xs p-2 text-xs">
+                <p className="font-medium text-foreground">
+                  [{citationNum}] {passage.source}
+                </p>
+                <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">
+                  {passage.text}
+                </p>
+                {passage.url && (
+                  <span className="inline-flex items-center gap-1 text-[10px] text-primary mt-1.5 font-medium">
+                    Read original source on PMC <ExternalLink className="w-2.5 h-2.5" />
+                  </span>
+                )}
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
+        );
+      })}
+    </span>
   );
 }
 
@@ -198,124 +401,330 @@ export function ClinicalNotePanel({
   };
 
   return (
-    <section className="p-4 rounded-xl border bg-card" aria-label="Guideline-grounded note">
-      <div className="flex items-center gap-2 mb-3 flex-wrap">
-        <FileText className="w-4 h-4 text-primary" aria-hidden="true" />
-        <h3 className="text-sm font-medium">Guideline-Grounded Note</h3>
-        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
-          AI-GENERATED
-        </span>
-        {note && (
-          <span
-            className={cn(
-              "text-[10px] px-1.5 py-0.5 rounded font-medium",
-              BAND_COPY[band].tone,
-            )}
-          >
-            {BAND_COPY[band].label}
+    <section className="p-4 rounded-xl border bg-card" aria-label="Clinical interpretation">
+      <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+        <div className="flex items-center gap-2 flex-wrap">
+          <Stethoscope className="w-4 h-4 text-primary" aria-hidden="true" />
+          <h3 className="text-sm font-medium">Clinical Interpretation</h3>
+          <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+            AI-GENERATED
           </span>
-        )}
-        {signedOff && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-success/10 text-success font-medium">
-            {status === "edited" ? "EDITED & SIGNED OFF" : "SIGNED OFF"}
-          </span>
-        )}
-        {status === "rejected" && (
-          <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive font-medium">
-            REJECTED
-          </span>
-        )}
+          {note && (
+            <span
+              className={cn(
+                "text-[10px] px-1.5 py-0.5 rounded font-medium",
+                BAND_COPY[band].tone,
+              )}
+            >
+              {BAND_COPY[band].label}
+            </span>
+          )}
+          {signedOff && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-success/10 text-success font-medium">
+              {status === "edited" ? "EDITED & SIGNED OFF" : "SIGNED OFF"}
+            </span>
+          )}
+          {status === "rejected" && (
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-destructive/10 text-destructive font-medium">
+              REJECTED
+            </span>
+          )}
+        </div>
+
+        <TooltipProvider delayDuration={150}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                variant="ghost"
+                onClick={onRegenerate}
+                disabled={state.kind === "loading"}
+                aria-label="Regenerate clinical note with MEDITRON"
+                className="h-7 w-7 p-0 text-muted-foreground hover:text-foreground"
+              >
+                <RefreshCw
+                  className={cn("w-3.5 h-3.5", state.kind === "loading" && "animate-spin")}
+                  aria-hidden="true"
+                />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              <p className="text-xs">Regenerate clinical note with MEDITRON</p>
+            </TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {state.kind === "loading" && (
-        <div className="space-y-2" data-testid="clinical-note-loading" role="status">
-          <div className="flex items-center gap-2 text-[11px] text-muted-foreground mb-2">
-            <Loader2 className="w-3.5 h-3.5 animate-spin" aria-hidden="true" />
-            Drafting from retrieved clinical evidence…
+        <div className="space-y-3 py-1" data-testid="clinical-note-loading" role="status">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="w-3.5 h-3.5 animate-spin text-primary" aria-hidden="true" />
+            <span>Consulting clinical literature &amp; drafting note with MEDITRON…</span>
           </div>
-          <Skeleton className="h-3 w-full" />
-          <Skeleton className="h-3 w-[92%]" />
-          <Skeleton className="h-3 w-[78%]" />
+          <div className="space-y-2">
+            <Skeleton className="h-3.5 w-full" />
+            <Skeleton className="h-3.5 w-[94%]" />
+            <Skeleton className="h-3.5 w-[82%]" />
+          </div>
+          <div className="pt-1 space-y-1.5">
+            <Skeleton className="h-3 w-[25%]" />
+            <Skeleton className="h-3 w-[75%]" />
+            <Skeleton className="h-3 w-[60%]" />
+          </div>
         </div>
       )}
 
       {state.kind === "error" && (
-        <NoteAlert tone="destructive">
-          {state.error.message || "Could not reach the clinical note service."}
-        </NoteAlert>
+        <div className="space-y-3">
+          <div className="flex items-start justify-between gap-2 p-2 rounded-lg border bg-destructive/5 border-destructive/20">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="w-3.5 h-3.5 text-destructive flex-shrink-0 mt-0.5" />
+              <div className="text-[11px] leading-relaxed text-destructive">
+                <p className="font-medium">{state.error.message || "Could not reach the clinical note service."}</p>
+                <p className="mt-0.5 opacity-80">Showing verified literature reference base below for clinical evaluation.</p>
+              </div>
+            </div>
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={onRegenerate}
+              className="text-xs h-7 flex-shrink-0"
+            >
+              <RefreshCw className="w-3 h-3 mr-1.5" aria-hidden="true" /> Try again
+            </Button>
+          </div>
+
+          {/* Fallback Reference Literature Base */}
+          <div className="p-3 rounded-lg border bg-muted/20 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5 text-primary" />
+                <p className="text-xs font-medium">Standard Medical References &amp; Diagnostic Criteria</p>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                Verified Literature
+              </span>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Standard peer-reviewed literature and radiological grading criteria used by the KneeXpert classification engine:
+            </p>
+            <ol className="space-y-2 pt-0.5">
+              {GENERAL_MEDICAL_REFERENCES.map((ref, idx) => (
+                <li
+                  key={idx}
+                  className="text-xs p-2.5 rounded-lg bg-card border flex items-start justify-between gap-3 hover:bg-accent/40 transition-colors"
+                >
+                  <div className="flex items-start gap-2">
+                    <span className="font-semibold text-primary text-xs mt-0.5">{idx + 1}.</span>
+                    <div>
+                      <p className="text-foreground/90 font-medium text-xs leading-snug">{ref.citation}</p>
+                      {ref.note && <p className="text-[11px] text-muted-foreground mt-0.5">{ref.note}</p>}
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        {ref.badge && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-primary/10 text-primary font-medium">
+                            {ref.badge}
+                          </span>
+                        )}
+                        {ref.pmcid && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-muted text-muted-foreground border">
+                            {ref.pmcid}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <a
+                    href={ref.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline flex-shrink-0 px-2.5 py-1 rounded-md bg-background border shadow-xs hover:bg-accent transition-colors"
+                    title="Read original peer-reviewed publication in new tab"
+                  >
+                    <span>Read Source</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
       )}
 
       {/* Withheld: say so plainly, and say why. Never substitute other text. */}
       {state.kind === "ready" && !note && (
-        <NoteAlert tone="warning" testId="clinical-note-unavailable">
-          <p>
-            {response?.fallback_reason
-              ? FALLBACK_COPY[response.fallback_reason]
-              : "AI note unavailable."}
-          </p>
-          {response?.fallback_reason === "gate_rejected" && (
-            <p className="mt-1 opacity-80">
-              {plural(response.gate_attempts, "attempt")} below the groundedness
-              threshold. The deterministic interpretation above is unaffected.
-            </p>
-          )}
-        </NoteAlert>
-      )}
-
-      {state.kind === "ready" && note && (
-        <div className="space-y-3" data-testid="clinical-note-body">
-          <NoteAlert tone="warning">
-            Drafted by a language model from retrieved literature. Requires
-            physician review before it enters the patient record.
+        <div className="space-y-3">
+          <NoteAlert tone="warning" testId="clinical-note-unavailable">
+            <div className="flex items-start justify-between gap-2">
+              <div>
+                <p>
+                  {response?.fallback_reason
+                    ? FALLBACK_COPY[response.fallback_reason]
+                    : "AI note unavailable."}
+                </p>
+                {response?.fallback_reason === "gate_rejected" && (
+                  <p className="mt-1 opacity-80">
+                    {plural(response.gate_attempts, "attempt")} below the groundedness
+                    threshold. Showing general verified reference literature below for clinical evaluation.
+                  </p>
+                )}
+                {response?.fallback_reason === "llm_unavailable" && (
+                  <p className="mt-1 opacity-80">
+                    Language model service is unreachable. Showing general verified reference literature below for clinical evaluation.
+                  </p>
+                )}
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onRegenerate}
+                className="text-xs h-7 flex-shrink-0"
+              >
+                <RefreshCw className="w-3 h-3 mr-1.5" aria-hidden="true" /> Regenerate draft
+              </Button>
+            </div>
           </NoteAlert>
 
-          {draft === null ? (
-            <p className="text-xs leading-relaxed text-foreground/90">
-              {reviewedText?.trim() ? reviewedText : note.synthesis}
-            </p>
-          ) : (
-            <Textarea
-              value={draft}
-              onChange={event => setDraft(event.target.value)}
-              rows={6}
-              aria-label="Edit clinical note"
-              className="text-xs leading-relaxed"
-            />
-          )}
-
-          {/* After an edit, both versions stay visible: "reviewed by" is only
-              meaningful if what was changed can be seen. */}
-          {status === "edited" && reviewedText?.trim() && draft === null && (
-            <details className="text-[10px]">
-              <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
-                Show the model's original wording
-              </summary>
-              <p className="mt-1 p-2 rounded-lg bg-muted/40 border text-muted-foreground leading-relaxed">
-                {note.synthesis}
-              </p>
-            </details>
-          )}
-
-          {note.next_steps.length > 0 && (
-            <div>
-              <p className="text-[11px] font-medium text-muted-foreground mb-1">
-                Suggested next steps
-              </p>
-              <ul className="space-y-1">
-                {note.next_steps.map(step => (
-                  <li
-                    key={step}
-                    className="text-[11px] leading-relaxed flex gap-1.5"
-                  >
-                    <span className="text-primary" aria-hidden="true">
-                      •
-                    </span>
-                    <span>{step}</span>
-                  </li>
-                ))}
-              </ul>
+          {/* Fallback Reference Literature Base */}
+          <div className="p-3 rounded-lg border bg-muted/20 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <BookOpen className="w-3.5 h-3.5 text-primary" />
+                <p className="text-xs font-medium">Standard Medical References &amp; Diagnostic Criteria</p>
+              </div>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
+                Verified Literature
+              </span>
             </div>
-          )}
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              Standard peer-reviewed literature and radiological grading criteria used by the KneeXpert classification engine:
+            </p>
+            <ol className="space-y-2 pt-0.5">
+              {GENERAL_MEDICAL_REFERENCES.map((ref, idx) => (
+                <li
+                  key={idx}
+                  className="text-xs p-2.5 rounded-lg bg-card border flex items-start justify-between gap-3 hover:bg-accent/40 transition-colors"
+                >
+                  <div className="flex items-start gap-2">
+                    <span className="font-semibold text-primary text-xs mt-0.5">{idx + 1}.</span>
+                    <div>
+                      <p className="text-foreground/90 font-medium text-xs leading-snug">{ref.citation}</p>
+                      {ref.note && <p className="text-[11px] text-muted-foreground mt-0.5">{ref.note}</p>}
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        {ref.badge && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-primary/10 text-primary font-medium">
+                            {ref.badge}
+                          </span>
+                        )}
+                        {ref.pmcid && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-muted text-muted-foreground border">
+                            {ref.pmcid}
+                          </span>
+                        )}
+                        {ref.pmid && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-muted text-muted-foreground border">
+                            PMID: {ref.pmid}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  <a
+                    href={ref.url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline flex-shrink-0 px-2.5 py-1 rounded-md bg-background border shadow-xs hover:bg-accent transition-colors"
+                    title="Read original peer-reviewed publication in new tab"
+                  >
+                    <span>Read Source</span>
+                    <ExternalLink className="w-3 h-3" />
+                  </a>
+                </li>
+              ))}
+            </ol>
+          </div>
+        </div>
+      )}
+
+      {state.kind === "ready" && note && (() => {
+        const { cleanSynthesis, steps } = extractNextStepsIfMissing(note.synthesis, note.next_steps);
+        return (
+          <div className="space-y-3" data-testid="clinical-note-body">
+            <NoteAlert tone="warning">
+              Drafted by a language model from retrieved literature. Requires
+              physician review before it enters the patient record.
+            </NoteAlert>
+
+            {draft === null ? (
+              <div className="p-3.5 rounded-lg border bg-card/60 text-xs sm:text-[13px] leading-relaxed text-foreground/90 shadow-2xs">
+                <p className="font-normal leading-relaxed">
+                  {reviewedText?.trim() ? (
+                    reviewedText
+                  ) : (
+                    <FormattedClinicalText
+                      text={cleanSynthesis}
+                      passages={response?.retrieved_passages}
+                      onCitationClick={() => setShowEvidence(true)}
+                    />
+                  )}
+                </p>
+              </div>
+            ) : (
+              <Textarea
+                value={draft}
+                onChange={event => setDraft(event.target.value)}
+                rows={6}
+                aria-label="Edit clinical note"
+                className="text-xs sm:text-sm leading-relaxed"
+              />
+            )}
+
+            {/* After an edit, both versions stay visible: "reviewed by" is only
+                meaningful if what was changed can be seen. */}
+            {status === "edited" && reviewedText?.trim() && draft === null && (
+              <details className="text-[10px]">
+                <summary className="cursor-pointer text-muted-foreground hover:text-foreground">
+                  Show the model's original wording
+                </summary>
+                <p className="mt-1 p-2 rounded-lg bg-muted/40 border text-muted-foreground leading-relaxed">
+                  <FormattedClinicalText
+                    text={cleanSynthesis}
+                    passages={response?.retrieved_passages}
+                    onCitationClick={() => setShowEvidence(true)}
+                  />
+                </p>
+              </details>
+            )}
+
+            {steps.length > 0 && (
+              <div className="p-3 rounded-lg border bg-muted/20 space-y-2">
+                <p className="text-[11px] font-semibold text-foreground/80 flex items-center gap-1.5 uppercase tracking-wider">
+                  <span className="w-1.5 h-1.5 rounded-full bg-primary" />
+                  Recommended Next Steps
+                </p>
+                <ul className="space-y-1.5 pl-1">
+                  {steps.map((step, idx) => (
+                    <li
+                      key={idx}
+                      className="text-xs leading-relaxed flex items-start gap-2 text-foreground/90"
+                    >
+                      <span className="text-primary font-bold text-xs" aria-hidden="true">
+                        {idx + 1}.
+                      </span>
+                      <span>
+                        <FormattedClinicalText
+                          text={step}
+                          passages={response?.retrieved_passages}
+                          onCitationClick={() => setShowEvidence(true)}
+                        />
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
 
           <Button
             type="button"
@@ -357,31 +766,34 @@ export function ClinicalNotePanel({
               {response?.retrieved_passages.map((passage, index) => (
                 <div
                   key={passage.passage_id}
-                  className="p-2 rounded-lg bg-muted/40 border text-[10px] leading-relaxed"
+                  className="p-2.5 rounded-lg bg-muted/40 border text-[10px] leading-relaxed"
                 >
-                  <div className="flex items-center gap-1.5 mb-1 flex-wrap">
-                    <span className="font-medium">[{index + 1}]</span>
-                    <span className="text-muted-foreground">
-                      {passage.source}
-                    </span>
-                    <span className="px-1 rounded bg-background text-muted-foreground">
-                      {passage.source_type}
-                    </span>
-                    <span className="px-1 rounded bg-background text-muted-foreground">
-                      {passage.licence}
-                    </span>
+                  <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="font-semibold text-primary">[{index + 1}]</span>
+                      <span className="text-foreground/90 font-medium">
+                        {passage.source}
+                      </span>
+                      <span className="px-1 rounded bg-background text-muted-foreground uppercase text-[9px] font-medium border">
+                        {passage.source_type}
+                      </span>
+                      <span className="px-1 rounded bg-background text-muted-foreground text-[9px] border">
+                        {passage.licence}
+                      </span>
+                    </div>
+                    {passage.url && (
+                      <a
+                        href={passage.url}
+                        target="_blank"
+                        rel="noreferrer noopener"
+                        className="inline-flex items-center gap-1 text-[10px] font-medium text-primary hover:underline px-1.5 py-0.5 rounded bg-primary/5 border border-primary/20 transition-colors"
+                      >
+                        <span>Read on PMC</span>
+                        <ExternalLink className="w-2.5 h-2.5" />
+                      </a>
+                    )}
                   </div>
                   <p className="text-muted-foreground">{passage.text}</p>
-                  {passage.url && (
-                    <a
-                      href={passage.url}
-                      target="_blank"
-                      rel="noreferrer noopener"
-                      className="text-primary hover:underline"
-                    >
-                      Source
-                    </a>
-                  )}
                 </div>
               ))}
             </div>
@@ -447,10 +859,6 @@ export function ClinicalNotePanel({
                   >
                     <X className="w-3 h-3 mr-1.5" aria-hidden="true" /> Reject
                   </Button>
-                  <Button type="button" size="sm" variant="ghost" onClick={onRegenerate}>
-                    <RefreshCw className="w-3 h-3 mr-1.5" aria-hidden="true" />{" "}
-                    Regenerate
-                  </Button>
                 </div>
               )}
 
@@ -480,8 +888,9 @@ export function ClinicalNotePanel({
               )}
             </div>
           )}
-        </div>
-      )}
+          </div>
+        );
+      })()}
     </section>
   );
 }

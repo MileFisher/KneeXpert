@@ -35,8 +35,9 @@ physician to review. You do not make final diagnoses.
 RULES
 1. Every clinical claim you write must be supported either by the FINDINGS block \
 or by a numbered passage in the EVIDENCE block. Nothing else.
-2. Cite the supporting passage inline as [n]. A sentence with no support gets no \
-citation - and should not be written.
+2. Cite the supporting passage inline as [n] using ONLY valid numbers present in \
+the EVIDENCE block (e.g. [1] to [6]). Never cite numbers that do not exist in EVIDENCE. \
+At most 1-2 citations per sentence. NEVER write repeating sequential citations (e.g. do not write [1][2][3][4][5][6]).
 3. Never invent measurements, dosages, laterality, compartment locations, or \
 timeframes that are not in FINDINGS or EVIDENCE.
 4. Confidence values are maximum-softmax outputs and are poorly calibrated. \
@@ -46,7 +47,7 @@ evidence in the supplied sources" rather than guessing.
 6. Do not restate the patient's identity. Do not address the patient.
 7. Output valid JSON only, matching the schema. No prose outside the JSON.
 
-LENGTH: synthesis at most 6 sentences; at most 4 next_steps."""
+LENGTH: synthesis at most 4 concise sentences; at most 3 next_steps."""
 
 NOTE_JSON_SCHEMA: dict[str, Any] = {
     "type": "object",
@@ -247,19 +248,47 @@ _JSON_OBJECT = re.compile(r"\{.*\}", re.S)
 CITATION_MARKER = re.compile(r"\[(\d+)\]")
 
 
+def _clean_citations(text: str, max_passage: int = 10) -> str:
+    """Filter out hallucinated citations and collapse runaway repetitive citation loops."""
+    if not text:
+        return text
+
+    # Remove citations with high numbers (e.g. > max_passage)
+    def _filter_num(m: re.Match[str]) -> str:
+        num = int(m.group(1))
+        return m.group(0) if 1 <= num <= max_passage else ""
+
+    cleaned = CITATION_MARKER.sub(_filter_num, text)
+
+    # Collapse excessive consecutive citations e.g. [1] [2] [3] [4] [5] -> at most 2
+    def _collapse_run(m: re.Match[str]) -> str:
+        found = CITATION_MARKER.findall(m.group(0))
+        unique: list[str] = []
+        for c in found:
+            marker = f"[{c}]"
+            if marker not in unique:
+                unique.append(marker)
+        return " " + " ".join(unique[:2]) if unique else ""
+
+    cleaned = re.sub(r"(?:\[\d+\]\s*){3,}", _collapse_run, cleaned)
+    return re.sub(r"\s+", " ", cleaned).strip()
+
+
 def parse_note(raw: str) -> tuple[ClinicalNote | None, ParseMode | None]:
     """Parse model output into a note, tolerantly.
 
     Returns ``(None, None)`` only for genuinely empty output. Anything else
     yields a note paired with the mode it was read in, falling back to treating
-    the whole response as the synthesis. The mode is returned rather than
+    the extracted prose as the synthesis. The mode is returned rather than
     swallowed because a rising prose-fallback rate is a reportable signal about
     the model, and the caller records it on the response.
     """
     if not raw or not raw.strip():
         return None, None
 
-    match = _JSON_OBJECT.search(raw)
+    cleaned_raw = raw.strip()
+
+    match = _JSON_OBJECT.search(cleaned_raw)
     if match:
         try:
             payload = json.loads(match.group(0))
@@ -271,15 +300,46 @@ def parse_note(raw: str) -> tuple[ClinicalNote | None, ParseMode | None]:
             if isinstance(synthesis, str) and synthesis.strip():
                 return (
                     ClinicalNote(
-                        synthesis=synthesis.strip(),
+                        synthesis=_clean_citations(synthesis.strip()),
                         next_steps=[
-                            str(s).strip() for s in steps if str(s).strip()
+                            _clean_citations(str(s).strip())
+                            for s in steps
+                            if str(s).strip()
                         ],
                     ),
                     "json",
                 )
 
-    return ClinicalNote(synthesis=raw.strip(), next_steps=[]), "prose_fallback"
+    # Resilient extraction for malformed or truncated JSON
+    if '"synthesis"' in cleaned_raw:
+        synth_match = re.search(r'"synthesis"\s*:\s*"((?:\\.|[^"\\])*)', cleaned_raw)
+        if synth_match:
+            synth_text = synth_match.group(1)
+            # Unescape basic JSON string escapes if present
+            try:
+                synth_text = synth_text.encode("utf-8").decode("unicode_escape")
+            except Exception:
+                pass
+            synth_text = _clean_citations(synth_text.strip())
+
+            # Attempt to extract next_steps if any were generated before truncation
+            steps: list[str] = []
+            steps_match = re.search(r'"next_steps"\s*:\s*\[(.*)', cleaned_raw, re.S)
+            if steps_match:
+                extracted_steps = re.findall(r'"([^"\\]*(?:\\.[^"\\]*)*)(?:"|$)', steps_match.group(1))
+                steps = [_clean_citations(s.strip()) for s in extracted_steps if s.strip()]
+
+            if synth_text:
+                return ClinicalNote(synthesis=synth_text, next_steps=steps), "prose_fallback"
+
+    # Fallback to plain prose: strip any stray JSON wrappers so raw syntax is never shown
+    prose = cleaned_raw
+    prose = re.sub(r'^\s*\{\s*"synthesis"\s*:\s*"?', '', prose)
+    prose = re.sub(r'"?\s*,?\s*"next_steps".*$', '', prose, flags=re.S)
+    prose = re.sub(r'[\{\}\[\]"]', '', prose)
+    prose = _clean_citations(prose.strip())
+
+    return ClinicalNote(synthesis=prose if prose else cleaned_raw, next_steps=[]), "prose_fallback"
 
 
 def revision_hint_for(rejected: list[str]) -> str:

@@ -185,9 +185,41 @@ describe("ClinicalNotePanel", () => {
       ).toBeInTheDocument();
     });
 
+    it("cleans raw JSON wrapper if model outputs unparsed JSON string", () => {
+      const rawJsonNote: ClinicalNoteResponse = {
+        ...BASE,
+        clinical_note: {
+          synthesis:
+            '{"synthesis": "Patient exhibits joint-space narrowing [1] [2].", "next_steps": ["Order MRI [1]."]}',
+          next_steps: [],
+          sentences: [],
+        },
+      };
+      renderPanel({ state: { kind: "ready", response: rawJsonNote } });
+      expect(screen.getByText(/Patient exhibits joint-space narrowing/)).toBeInTheDocument();
+      expect(screen.queryByText(/\{"synthesis"/)).not.toBeInTheDocument();
+    });
+
+    it("filters out hallucinated citations beyond available passages", () => {
+      const runawayCitationNote: ClinicalNoteResponse = {
+        ...BASE,
+        clinical_note: {
+          synthesis: "Finding documented [1] [191].",
+          next_steps: ["Follow up [200]."],
+          sentences: [],
+        },
+      };
+      renderPanel({ state: { kind: "ready", response: runawayCitationNote } });
+      expect(screen.getByText(/Finding documented/)).toBeInTheDocument();
+      expect(screen.queryByText("[191]")).not.toBeInTheDocument();
+      expect(screen.queryByText("[200]")).not.toBeInTheDocument();
+    });
+
     it("can request a regeneration", () => {
       const handlers = renderPanel();
-      fireEvent.click(screen.getByRole("button", { name: /Regenerate/ }));
+      const buttons = screen.getAllByRole("button", { name: /Regenerate/i });
+      expect(buttons.length).toBeGreaterThan(0);
+      fireEvent.click(buttons[0]);
       expect(handlers.onRegenerate).toHaveBeenCalledOnce();
     });
   });

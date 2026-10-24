@@ -5,7 +5,8 @@ import {
   Loader2, CheckCircle2, Brain, Sparkles, AlertTriangle, User, Calendar,
   ChevronRight, Search, SlidersHorizontal, Clock, Scan, Type, RotateCw,
   Grid3X3, List, Play, Pause, RefreshCw, Download, Save, Trash2, Move, GripVertical,
-  BookOpen, Activity, ShieldCheck, Timer, Users, ArrowRight, Stethoscope, FlaskConical
+  BookOpen, Activity, ShieldCheck, Timer, Users, ArrowRight, Stethoscope, FlaskConical,
+  ExternalLink
 } from "lucide-react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { toast } from "sonner";
@@ -601,28 +602,7 @@ function ConfirmInputDialog({
 // ============================================================
 // Shared clinical helpers — medical references
 // ============================================================
-const medicalReferences = [
-  {
-    citation: "Kellgren JH, Lawrence JS. Radiological assessment of osteo-arthrosis. Ann Rheum Dis. 1957;16(4):494–502.",
-    note: "Original Kellgren–Lawrence grading scale (KL 0–4) used by this classifier.",
-  },
-  {
-    citation: "Altman RD, Gold GE. Atlas of individual radiographic features in osteoarthritis, revised. Osteoarthritis Cartilage. 2007;15(Suppl A):A1–A56.",
-    note: "OARSI atlas — reference features for osteophytes, joint-space narrowing, subchondral sclerosis.",
-  },
-  {
-    citation: "Hunter DJ, Guermazi A, et al. Evolution of semi-quantitative whole joint assessment of knee OA: MOAKS. Osteoarthritis Cartilage. 2011;19(8):990–1002.",
-    note: "MOAKS framework for MRI scoring of cartilage, BMLs, menisci.",
-  },
-  {
-    citation: "Tiulpin A, et al. Automatic knee osteoarthritis diagnosis from plain radiographs: a deep learning–based approach. Sci Rep. 2018;8:1727.",
-    note: "Validation baseline for CNN ensembles on plain-film KL grading.",
-  },
-  {
-    citation: "Bannur S, et al. Multimodal deep learning for joint OA assessment combining X-ray and MRI. Med Image Anal. 2023;85:102749.",
-    note: "Evidence that joint X-ray + MRI fusion improves grading reliability over single-modality models.",
-  },
-];
+import { GENERAL_MEDICAL_REFERENCES, resolveReferenceSource } from "@/lib/medicalReferences";
 
 interface ModalityResult { modality: Modality; grade: number; confidence: number; }
 interface JointAnalysis {
@@ -847,16 +827,60 @@ function ClinicalInterpretation({
 
       {!compact && (
         <div className="p-4 rounded-xl border bg-card">
-          <div className="flex items-center gap-2 mb-3">
-            <BookOpen className="w-4 h-4 text-primary" />
-            <p className="text-sm font-medium">Medical References</p>
-            <span className="text-[10px] text-muted-foreground">Evidence base for this classification</span>
+          <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
+            <div className="flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-primary" />
+              <p className="text-sm font-medium">Medical References</p>
+              <span className="text-[10px] text-muted-foreground">Evidence base for this classification</span>
+            </div>
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-success/10 text-success font-medium">
+              Peer-Reviewed Literature
+            </span>
           </div>
-          <ol className="space-y-2.5 list-decimal list-inside">
-            {(backendSources.length ? backendSources.map(c => ({ citation: c, note: "" })) : medicalReferences).map((r, i) => (
-              <li key={i} className="text-xs leading-relaxed">
-                <span className="text-foreground/90">{r.citation}</span>
-                {r.note && <p className="text-[11px] text-muted-foreground mt-0.5 ml-4">{r.note}</p>}
+          <ol className="space-y-2.5">
+            {(backendSources.length ? backendSources.map(resolveReferenceSource) : GENERAL_MEDICAL_REFERENCES).map((r, i) => (
+              <li
+                key={i}
+                className="text-xs leading-relaxed p-2.5 rounded-lg border bg-muted/20 hover:bg-muted/40 transition-colors"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2">
+                    <span className="font-semibold text-primary flex-shrink-0 text-xs mt-0.5">{i + 1}.</span>
+                    <div>
+                      <p className="text-foreground/90 font-medium leading-snug">{r.citation}</p>
+                      {r.note && <p className="text-[11px] text-muted-foreground mt-0.5">{r.note}</p>}
+                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
+                        {r.badge && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-primary/10 text-primary font-medium">
+                            {r.badge}
+                          </span>
+                        )}
+                        {r.pmcid && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-background text-muted-foreground border">
+                            {r.pmcid}
+                          </span>
+                        )}
+                        {r.pmid && (
+                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-background text-muted-foreground border">
+                            PMID: {r.pmid}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                  {r.url && (
+                    <a
+                      href={r.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline flex-shrink-0 px-2 py-1 rounded-md bg-background border shadow-xs hover:bg-accent transition-colors"
+                      title="Read original peer-reviewed publication in new tab"
+                    >
+                      <span>Read Source</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
               </li>
             ))}
           </ol>
@@ -2973,26 +2997,10 @@ function DiagnosticWorkspace({
                         )}
                       </div>
                     )}
-                    <div className="absolute bottom-3 left-3 right-3 flex items-center justify-between gap-2 z-10">
-                      <span className="text-[10px] text-white/80 bg-black/50 px-2 py-0.5 rounded truncate">{uploadedFileName}</span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleFileSelect(); }}
-                          className="text-[10px] px-2.5 py-1 rounded-lg bg-background/90 border hover:bg-muted transition-colors"
-                        >
-                          Change file
-                        </button>
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleStartAnalysis(); }}
-                          disabled={!activeModReady}
-                          className={cn(
-                            "inline-flex items-center gap-1 text-[10px] px-3 py-1 rounded-lg font-medium transition-colors",
-                            activeModReady ? "bg-primary text-primary-foreground hover:bg-primary/90" : "bg-muted text-muted-foreground cursor-not-allowed"
-                          )}
-                        >
-                          <Check className="w-3 h-3" /> Confirm input
-                        </button>
-                      </div>
+                    <div className="absolute bottom-3 left-3 flex items-center gap-2 z-10 pointer-events-none">
+                      <span className="text-[10px] text-white/90 bg-black/60 backdrop-blur-xs px-2.5 py-1 rounded-md truncate font-medium">
+                        {uploadedFileName}
+                      </span>
                     </div>
                   </motion.div>
                 ) : diagnosticStage === "complete" ? (
@@ -3111,43 +3119,20 @@ function DiagnosticWorkspace({
                     </div>
                   </motion.div>
                 ) : (
-                  <motion.div key="processing" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
-                    className="absolute inset-0 flex flex-col items-center justify-center p-4"
-                  >
+                  <motion.div key="processing-viewer" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="absolute inset-0 flex items-center justify-center">
                     {(uploadedImageUrl || (activeModality === "mri" ? mriInputDisplayUrl : mriPreviewDisplayUrl)) && (
-                      <div className="absolute inset-0 opacity-20 pointer-events-none">
-                        <img
-                          src={uploadedImageUrl ?? (activeModality === "mri" ? mriInputDisplayUrl : mriPreviewDisplayUrl) ?? undefined}
-                          alt=""
-                          className="w-full h-full object-contain"
-                        />
-                      </div>
+                      <img
+                        src={uploadedImageUrl ?? (activeModality === "mri" ? mriInputDisplayUrl : mriPreviewDisplayUrl) ?? undefined}
+                        alt="Scan preview"
+                        className="w-full h-full object-contain"
+                        draggable={false}
+                      />
                     )}
-                    <div className="relative w-72 sm:w-80 p-5 rounded-xl bg-background border shadow-sm">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Loader2 className="w-4 h-4 text-primary animate-spin" />
-                      <p className="text-sm font-medium">Processing {activeModality === "xray" ? "X-Ray" : "MRI"}</p>
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate mb-3">{uploadedFileName}</p>
-                    <p className="text-xs text-foreground/90 leading-relaxed">
-                      {activeModality === "xray"
-                        ? stages.find((_, i) => i === currentStageIndex)?.label ?? "Running inference…"
-                        : stages.find((_, i) => i === currentStageIndex)?.label ?? "Processing…"}
-                    </p>
-                    {isProcessing && uploadProgress < 100 && (
-                      <div className="mt-3 space-y-1">
-                        <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                          <span>Uploading…</span>
-                          <span className="text-mono">{Math.round(uploadProgress)}%</span>
-                        </div>
-                        <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                          <motion.div className="h-full bg-primary rounded-full" style={{ width: `${Math.min(uploadProgress, 100)}%` }} />
-                        </div>
-                      </div>
-                    )}
-                    {isProcessing && uploadProgress >= 100 && (
-                      <p className="text-[10px] text-muted-foreground mt-2">Running model inference…</p>
-                    )}
+                    <div className="absolute bottom-3 left-3 flex items-center gap-2 z-10 pointer-events-none">
+                      <span className="text-[10px] text-white/90 bg-black/60 backdrop-blur-xs px-2.5 py-1 rounded-md font-medium flex items-center gap-1.5">
+                        <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
+                        {uploadedFileName}
+                      </span>
                     </div>
                   </motion.div>
                 )}
@@ -3307,7 +3292,7 @@ function DiagnosticWorkspace({
         {/* Results section */}
         <div className="px-4 sm:px-5 py-4 border-t">
           {diagnosticStage === "complete" ? (
-            <div className="max-w-4xl mx-auto space-y-4">
+            <div className="max-w-7xl mx-auto space-y-4">
               {!feedbackConfirmed && (
                 <div className="p-3 rounded-xl border border-primary/20 bg-primary/5 flex items-start gap-2">
                   <AlertTriangle className="w-4 h-4 text-primary flex-shrink-0 mt-0.5" />
@@ -3333,200 +3318,205 @@ function DiagnosticWorkspace({
                   </button>
                 </div>
               )}
-              {/* Findings */}
-              <div className="p-4 rounded-xl bg-success/5 border border-success/20">
-                <div className="flex items-center gap-2 mb-3">
-                  <CheckCircle2 className="w-4 h-4 text-success" />
-                  <p className="text-sm font-medium text-success">Analysis Complete</p>
-                  <div className="ml-auto flex items-center gap-2">
-                    <GradeBadge grade={result.grade} />
-                    <ConfidenceGauge value={result.confidence} />
-                  </div>
-                </div>
-                <div className="space-y-1.5">
-                  {result.findings.map((f, i) => (
-                    <div key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
-                      <span className="w-1.5 h-1.5 rounded-full bg-success mt-1.5 flex-shrink-0" />
-                      {f}
-                    </div>
-                  ))}
-                </div>
-              </div>
 
-              {/* Per-model performance breakdown */}
-              <div className="p-4 rounded-xl border bg-card">
-                <div className="flex items-center gap-2 mb-3">
-                  <Brain className="w-4 h-4 text-primary" />
-                  <p className="text-sm font-medium">Model Performance</p>
-                  <span className="text-[10px] text-muted-foreground ml-1">
-                    {activeModality === "xray" ? "X-Ray ensemble" : "MRI · MACS-Net + DeiT-S"}
-                  </span>
-                </div>
-                <div className="overflow-hidden rounded-lg border">
-                  <div className="grid grid-cols-[5fr_2fr_4fr_3fr_2fr] gap-2 px-3 py-2 bg-muted/50 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-                    <div>Model</div>
-                    <div className="text-center">Grade</div>
-                    <div>Confidence</div>
-                    <div className="text-right" title="Per forward pass. Hover a value for the GMACs equivalent.">
-                      GFLOPs
-                    </div>
-                    <div className="text-right">Params</div>
-                  </div>
-                  {modelRows.map((m) => {
-                    const isEnsemble = activeModality === "xray" && (m.isEnsemble ?? m.id === "ensemble");
-                    const isPrimary = activeModality === "mri" && m.isPrimary;
-                    const isSelected =
-                      activeModality === "xray"
-                        ? selectedModelIds.has(m.id)
-                        : selectedMriStageIds.has(m.id);
-                    const rowClickable = diagnosticStage === "complete" && (activeModality === "xray" || activeModality === "mri");
-                    return (
-                      <button
-                        key={m.id}
-                        type="button"
-                        onClick={() => {
-                          if (activeModality === "xray") toggleModelSelection(m.id);
-                          if (activeModality === "mri") toggleMriStageSelection(m.id);
-                        }}
-                        onDoubleClick={() => {
-                          if (activeModality === "xray") selectOnlyModel(m.id);
-                          if (activeModality === "mri") selectOnlyMriStage(m.id);
-                        }}
-                        className={cn(
-                          "w-full grid grid-cols-[5fr_2fr_4fr_3fr_2fr] gap-2 px-3 py-2 items-center text-xs border-t text-left transition-colors",
-                          (isEnsemble || isPrimary) && "bg-primary/5",
-                          rowClickable && "hover:bg-muted/50 cursor-pointer",
-                          isSelected && "ring-1 ring-inset ring-primary/30 bg-primary/5",
-                        )}
-                      >
-                        <div className="flex items-center gap-2 min-w-0">
-                          <span className="font-medium truncate">{m.name}</span>
-                          {isEnsemble && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">Ensemble</span>
-                          )}
-                          {isPrimary && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">Classifier</span>
-                          )}
-                          {isSelected && rowClickable && (
-                            <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Visible</span>
-                          )}
-                        </div>
-                        <div className="flex justify-center">
-                          {m.gradeDisplay ? (
-                            <span className="text-[10px] font-medium text-muted-foreground">{m.gradeDisplay}</span>
-                          ) : (
-                            <GradeBadge grade={m.grade} />
-                          )}
-                        </div>
-                        <div>
-                          {m.confidenceDisplay ? (
-                            <span className="text-[10px] text-muted-foreground truncate block">{m.confidenceDisplay}</span>
-                          ) : (
-                            <div className="flex items-center gap-2">
-                              <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
-                                <div className="h-full bg-primary rounded-full" style={{ width: `${m.confidence}%` }} />
-                              </div>
-                              <span className="text-mono text-[10px] text-muted-foreground w-10 text-right">{m.confidence.toFixed(1)}%</span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          {m.gflops != null ? (
-                            <span
-                              className="text-mono text-[10px] text-muted-foreground"
-                              title={formatModelCostTooltip(m)}
-                            >
-                              {m.gflops.toFixed(2)}G
-                              {m.costWarning && (
-                                <span className="text-warning" aria-label="incomplete measurement">*</span>
-                              )}
-                            </span>
-                          ) : (
-                            <span className="text-[10px] text-muted-foreground/40">—</span>
-                          )}
-                        </div>
-                        <div className="text-right">
-                          {m.paramsM != null ? (
-                            <span className="text-mono text-[10px] text-muted-foreground">{m.paramsM.toFixed(1)}M</span>
-                          ) : (
-                            <span className="text-[10px] text-muted-foreground/40">—</span>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-                {activeModality === "xray" && xrayApiData && (
-                  <>
-                    <p className="text-[10px] text-muted-foreground mt-2">
-                      {xrayApiData.model_count ?? Object.keys(xrayApiData.individual_results).length} models evaluated.
-                      Click a row to toggle; double-click to view only that model.
-                    </p>
-                    <XrayModelEvaluationPanel
-                      data={xrayApiData}
-                      selectedIds={selectedModelIds}
-                      showHeatmap={showGradCAM}
-                      baseImageUrl={uploadedImageUrl}
-                      inputFileName={uploadedFileName}
-                    />
-                  </>
-                )}
-                {activeModality === "mri" && mriApiData && (
-                  <>
-                    <p className="text-[10px] text-muted-foreground mt-2">
-                      2-stage pipeline (MACS-Net → DeiT-S). Click a row to toggle; double-click to view only that stage.
-                    </p>
-                    {mriCostLine && (
-                      <p className="text-[10px] text-muted-foreground mt-1">{mriCostLine}</p>
-                    )}
-                    <MriModelEvaluationPanel
-                      data={mriApiData}
-                      selectedIds={selectedMriStageIds}
-                      viewMode={mriViewMode}
-                      activeSliceIdx={mriGallerySliceIdx}
-                      onSliceChange={setMriGallerySliceIdx}
-                      inputFileName={uploadedFileName}
-                    />
-                    {mriApiData.ground_truth_labels && mriApiData.ground_truth_labels.length > 0 && (
-                      <p className="text-[10px] text-muted-foreground mt-2">
-                        SKM-TEA reference: {mriApiData.ground_truth_labels.join(", ")}
-                      </p>
-                    )}
-                    {mriApiData.multilabel_predictions.filter(l => l.predicted).length > 0 && (
-                      <div className="mt-3 rounded-lg border overflow-hidden">
-                        <div className="px-3 py-2 bg-muted/50 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-                          SKM-TEA categories (DeiT-S)
-                        </div>
-                        {mriApiData.multilabel_predictions
-                          .filter(l => l.predicted)
-                          .sort((a, b) => b.probability - a.probability)
-                          .map((l) => (
-                            <div key={l.name} className="flex items-center justify-between px-3 py-1.5 text-xs border-t">
-                              <span className="truncate pr-2">{l.name}</span>
-                              <span className="text-mono text-muted-foreground flex-shrink-0">{l.probability.toFixed(1)}%</span>
-                            </div>
-                          ))}
+              {/* 2-Column Responsive Diagnostic Results Layout */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+                {/* Left Column (5 cols): Quantitative Model Findings & Evaluation */}
+                <div className="lg:col-span-5 space-y-4">
+                  {/* Findings */}
+                  <div className="p-4 rounded-xl bg-success/5 border border-success/20 shadow-2xs">
+                    <div className="flex items-center gap-2 mb-3">
+                      <CheckCircle2 className="w-4 h-4 text-success" />
+                      <p className="text-sm font-medium text-success">Analysis Complete</p>
+                      <div className="ml-auto flex items-center gap-2">
+                        <GradeBadge grade={result.grade} />
+                        <ConfidenceGauge value={result.confidence} />
                       </div>
+                    </div>
+                    <div className="space-y-1.5">
+                      {result.findings.map((f, i) => (
+                        <div key={i} className="flex items-start gap-2 text-sm text-muted-foreground">
+                          <span className="w-1.5 h-1.5 rounded-full bg-success mt-1.5 flex-shrink-0" />
+                          {f}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Per-model performance breakdown */}
+                  <div className="p-4 rounded-xl border bg-card shadow-2xs">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Brain className="w-4 h-4 text-primary" />
+                      <p className="text-sm font-medium">Model Performance</p>
+                      <span className="text-[10px] text-muted-foreground ml-1">
+                        {activeModality === "xray" ? "X-Ray ensemble" : "MRI · MACS-Net + DeiT-S"}
+                      </span>
+                    </div>
+                    <div className="overflow-hidden rounded-lg border">
+                      <div className="grid grid-cols-[5fr_2fr_4fr_3fr_2fr] gap-2 px-3 py-2 bg-muted/50 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                        <div>Model</div>
+                        <div className="text-center">Grade</div>
+                        <div>Confidence</div>
+                        <div className="text-right" title="Per forward pass. Hover a value for the GMACs equivalent.">
+                          GFLOPs
+                        </div>
+                        <div className="text-right">Params</div>
+                      </div>
+                      {modelRows.map((m) => {
+                        const isEnsemble = activeModality === "xray" && (m.isEnsemble ?? m.id === "ensemble");
+                        const isPrimary = activeModality === "mri" && m.isPrimary;
+                        const isSelected =
+                          activeModality === "xray"
+                            ? selectedModelIds.has(m.id)
+                            : selectedMriStageIds.has(m.id);
+                        const rowClickable = diagnosticStage === "complete" && (activeModality === "xray" || activeModality === "mri");
+                        return (
+                          <button
+                            key={m.id}
+                            type="button"
+                            onClick={() => {
+                              if (activeModality === "xray") toggleModelSelection(m.id);
+                              if (activeModality === "mri") toggleMriStageSelection(m.id);
+                            }}
+                            onDoubleClick={() => {
+                              if (activeModality === "xray") selectOnlyModel(m.id);
+                              if (activeModality === "mri") selectOnlyMriStage(m.id);
+                            }}
+                            className={cn(
+                              "w-full grid grid-cols-[5fr_2fr_4fr_3fr_2fr] gap-2 px-3 py-2 items-center text-xs border-t text-left transition-colors",
+                              (isEnsemble || isPrimary) && "bg-primary/5",
+                              rowClickable && "hover:bg-muted/50 cursor-pointer",
+                              isSelected && "ring-1 ring-inset ring-primary/30 bg-primary/5",
+                            )}
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="font-medium truncate">{m.name}</span>
+                              {isEnsemble && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">Ensemble</span>
+                              )}
+                              {isPrimary && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">Classifier</span>
+                              )}
+                              {isSelected && rowClickable && (
+                                <span className="text-[9px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground">Visible</span>
+                              )}
+                            </div>
+                            <div className="flex justify-center">
+                              {m.gradeDisplay ? (
+                                <span className="text-[10px] font-medium text-muted-foreground">{m.gradeDisplay}</span>
+                              ) : (
+                                <GradeBadge grade={m.grade} />
+                              )}
+                            </div>
+                            <div>
+                              {m.confidenceDisplay ? (
+                                <span className="text-[10px] text-muted-foreground truncate block">{m.confidenceDisplay}</span>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+                                    <div className="h-full bg-primary rounded-full" style={{ width: `${m.confidence}%` }} />
+                                  </div>
+                                  <span className="text-mono text-[10px] text-muted-foreground w-10 text-right">{m.confidence.toFixed(1)}%</span>
+                                </div>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              {m.gflops != null ? (
+                                <span
+                                  className="text-mono text-[10px] text-muted-foreground"
+                                  title={formatModelCostTooltip(m)}
+                                >
+                                  {m.gflops.toFixed(2)}G
+                                  {m.costWarning && (
+                                    <span className="text-warning" aria-label="incomplete measurement">*</span>
+                                  )}
+                                </span>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground/40">—</span>
+                              )}
+                            </div>
+                            <div className="text-right">
+                              {m.paramsM != null ? (
+                                <span className="text-mono text-[10px] text-muted-foreground">{m.paramsM.toFixed(1)}M</span>
+                              ) : (
+                                <span className="text-[10px] text-muted-foreground/40">—</span>
+                              )}
+                            </div>
+                          </button>
+                        );
+                      })}
+                    </div>
+                    {activeModality === "xray" && xrayApiData && (
+                      <>
+                        <p className="text-[10px] text-muted-foreground mt-2">
+                          {xrayApiData.model_count ?? Object.keys(xrayApiData.individual_results).length} models evaluated.
+                          Click a row to toggle; double-click to view only that model.
+                        </p>
+                        <XrayModelEvaluationPanel
+                          data={xrayApiData}
+                          selectedIds={selectedModelIds}
+                          showHeatmap={showGradCAM}
+                          baseImageUrl={uploadedImageUrl}
+                          inputFileName={uploadedFileName}
+                        />
+                      </>
                     )}
-                  </>
-                )}
+                    {activeModality === "mri" && mriApiData && (
+                      <>
+                        <p className="text-[10px] text-muted-foreground mt-2">
+                          2-stage pipeline (MACS-Net → DeiT-S). Click a row to toggle; double-click to view only that stage.
+                        </p>
+                        {mriCostLine && (
+                          <p className="text-[10px] text-muted-foreground mt-1">{mriCostLine}</p>
+                        )}
+                        <MriModelEvaluationPanel
+                          data={mriApiData}
+                          selectedIds={selectedMriStageIds}
+                          viewMode={mriViewMode}
+                          activeSliceIdx={mriGallerySliceIdx}
+                          onSliceChange={setMriGallerySliceIdx}
+                          inputFileName={uploadedFileName}
+                        />
+                        {mriApiData.ground_truth_labels && mriApiData.ground_truth_labels.length > 0 && (
+                          <p className="text-[10px] text-muted-foreground mt-2">
+                            SKM-TEA reference: {mriApiData.ground_truth_labels.join(", ")}
+                          </p>
+                        )}
+                        {mriApiData.multilabel_predictions.filter(l => l.predicted).length > 0 && (
+                          <div className="mt-3 rounded-lg border overflow-hidden">
+                            <div className="px-3 py-2 bg-muted/50 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
+                              SKM-TEA categories (DeiT-S)
+                            </div>
+                            {mriApiData.multilabel_predictions
+                              .filter(l => l.predicted)
+                              .sort((a, b) => b.probability - a.probability)
+                              .map((l) => (
+                                <div key={l.name} className="flex items-center justify-between px-3 py-1.5 text-xs border-t">
+                                  <span className="truncate pr-2">{l.name}</span>
+                                  <span className="text-mono text-muted-foreground flex-shrink-0">{l.probability.toFixed(1)}%</span>
+                                </div>
+                              ))}
+                          </div>
+                        )}
+                      </>
+                    )}
+                  </div>
+                </div>
+
+                {/* Right Column (7 cols): Qualitative Clinical Synthesis & Literature Grounding */}
+                <div className="lg:col-span-7 space-y-4">
+                  <ClinicalNoteSection
+                    patient={patient}
+                    modality={activeModality}
+                    grade={result.grade}
+                    confidence={result.confidence}
+                    mriData={mriApiData}
+                  />
+                </div>
               </div>
 
-              {/* Clinical Interpretation + References */}
-              <ClinicalInterpretation patient={patient} analysis={computeJointAnalysis(patient, initialBatchResult)} batchResult={initialBatchResult} />
-
-              {/* RAG-grounded note, held apart from the deterministic
-                  interpretation above and gated on physician sign-off. */}
-              <ClinicalNoteSection
-                patient={patient}
-                modality={activeModality}
-                grade={result.grade}
-                confidence={result.confidence}
-                mriData={mriApiData}
-              />
-
-              {/* Actions */}
-              <div className="flex items-center justify-between flex-wrap gap-3">
+              {/* Bottom Actions Bar */}
+              <div className="p-4 rounded-xl border bg-card/60 flex items-center justify-between flex-wrap gap-3">
                 <p className="text-sm">
                   <span className="text-muted-foreground">Classification: </span>
                   <span className="font-medium">Grade {result.grade} Osteoarthritis</span>
@@ -3627,31 +3617,6 @@ function DiagnosticWorkspace({
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   Upload a scan in the viewer above, then confirm input to run AI diagnosis. Results and clinical interpretation will appear here when analysis completes.
                 </p>
-              </div>
-            </div>
-          ) : isProcessing ? (
-            <div className="max-w-4xl mx-auto py-6 px-4">
-              <div className="rounded-xl border bg-card p-6 flex flex-col items-center gap-4 text-center">
-                <Loader2 className="w-8 h-8 text-primary animate-spin" />
-                <div>
-                  <p className="text-sm font-medium">
-                    Analyzing {activeModality === "xray" ? "X-Ray" : "MRI"}…
-                  </p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {stages.find((_, i) => i === currentStageIndex)?.label ?? "Processing…"}
-                  </p>
-                </div>
-                {uploadProgress < 100 && (
-                  <div className="w-full max-w-xs space-y-1">
-                    <div className="flex items-center justify-between text-[10px] text-muted-foreground">
-                      <span>Uploading…</span>
-                      <span className="text-mono">{Math.round(uploadProgress)}%</span>
-                    </div>
-                    <div className="w-full h-1.5 bg-muted rounded-full overflow-hidden">
-                      <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${uploadProgress}%` }} />
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
           ) : null}

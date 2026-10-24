@@ -67,15 +67,18 @@ ABBREVIATIONS: frozenset[str] = frozenset(
 _WHITESPACE = re.compile(r"\s+")
 
 # A candidate boundary: terminator(s), then whitespace, then something that
-# could begin a sentence. A bracketed marker is allowed to sit between the
-# terminator and the next sentence so it is not orphaned.
-_BOUNDARY = re.compile(r"(?<=[.!?])(?:\s*\[\d+\])?\s+")
+# could begin a sentence.
+_BOUNDARY = re.compile(r"(?<=[.!?])\s+")
+
+# Normalize markers that follow a full stop so they attach to the sentence they cite:
+# e.g. "change is present. [1]" -> "change is present [1]."
+_NORM_CITATIONS = re.compile(r"\.\s*(\[\d+(?:[,\s-]+\d+)*\](?:\s*\[\d+\])*)\.?")
 
 # Trailing token before a full stop, used to test it against ABBREVIATIONS.
 _LAST_TOKEN = re.compile(r"([A-Za-z][A-Za-z.]*)\.$")
 
-# A bracketed citation marker alone, e.g. "[2]".
-_MARKER_ONLY = re.compile(r"^\[\d+\]$")
+# A citation marker fragment alone, e.g. "[2]", "[2].", "[1] [2].", "[1, 2]"
+_MARKER_ONLY = re.compile(r"^(?:\[[\d,\s-]+\][\s.]*)+$")
 
 # Decimals need no special handling here: _BOUNDARY requires whitespace after
 # the terminator, and a decimal point is always followed by a digit. Guarding
@@ -110,7 +113,8 @@ def split_sentences(text: str) -> list[str]:
     if not text or not text.strip():
         return []
 
-    normalised = _WHITESPACE.sub(" ", text).strip()
+    normalised = _NORM_CITATIONS.sub(r" \1.", text)
+    normalised = _WHITESPACE.sub(" ", normalised).strip()
 
     sentences: list[str] = []
     current = ""
@@ -129,13 +133,13 @@ def split_sentences(text: str) -> list[str]:
 
     cleaned = [s for s in (part.strip() for part in sentences) if s]
 
-    # A marker at the very end of the text has no trailing whitespace for
-    # _BOUNDARY to consume, so it arrives as its own fragment. Reattach it rather
-    # than scoring "[2]" as a clinical claim.
+    # A marker fragment alone has no trailing whitespace for _BOUNDARY to consume,
+    # so it arrives as its own fragment. Reattach it rather than scoring it as a clinical claim.
     merged: list[str] = []
     for sentence in cleaned:
-        if _MARKER_ONLY.match(sentence) and merged:
-            merged[-1] = f"{merged[-1]} {sentence}"
+        if _MARKER_ONLY.match(sentence):
+            if merged:
+                merged[-1] = f"{merged[-1]} {sentence}"
         else:
             merged.append(sentence)
     return merged

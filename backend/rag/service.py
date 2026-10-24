@@ -347,6 +347,52 @@ def generate_clinical_note(
                 triad=result.triad,
             )
 
+        # If the clinical synthesis is solidly grounded but ungrounded next_steps
+        # dragged down the overall note average, prune the ungrounded recommendations
+        # so clinicians receive the verified findings rather than having the note withheld.
+        if (
+            gate_enabled
+            and outcome.synthesis_groundedness is not None
+            and outcome.synthesis_groundedness >= GROUNDEDNESS_TAU
+        ):
+            passing_step_texts = {
+                s.text
+                for s in outcome.sentence_scores
+                if s.sentence_class == "next_step"
+                and s.groundedness >= GROUNDEDNESS_TAU
+            }
+            pruned_steps = [
+                step
+                for step in result.note.next_steps
+                if any(p_text in step or step in p_text for p_text in passing_step_texts)
+            ]
+            kept_scores = [
+                s
+                for s in outcome.sentence_scores
+                if s.sentence_class == "synthesis"
+                or s.groundedness >= GROUNDEDNESS_TAU
+            ]
+            from rag.gate import evaluate as gate_eval
+
+            pruned_outcome = gate_eval(kept_scores, threshold=GROUNDEDNESS_TAU)
+            if pruned_outcome.passed:
+                pruned_note = ClinicalNote(
+                    synthesis=result.note.synthesis,
+                    next_steps=pruned_steps,
+                )
+                return respond(
+                    clinical_note=_with_sentence_scores(
+                        pruned_note, pruned_outcome.sentence_scores
+                    ),
+                    generated_by=f"{OLLAMA_MODEL} via Ollama",
+                    gate_attempts=attempts,
+                    parse_mode=result.parse_mode,
+                    grounding_score=pruned_outcome.groundedness,
+                    triad=_triad_for(
+                        req, pruned_note, passages, pruned_outcome, include_passages
+                    ),
+                )
+
         # Name the failing sentences verbatim for the next attempt: a quoted
         # sentence gives the model more to act on than a paraphrased complaint.
         revision = revision_hint_for(outcome.rejected_sentences)

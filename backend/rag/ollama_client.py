@@ -89,6 +89,7 @@ def chat(
             "seed": seed,
             "num_ctx": num_ctx,
             "num_predict": num_predict,
+            "repeat_penalty": 1.15,
         },
     }
     if json_schema is not None:

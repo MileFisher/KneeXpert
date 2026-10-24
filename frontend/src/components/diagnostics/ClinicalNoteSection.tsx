@@ -76,13 +76,14 @@ export function ClinicalNoteSection({
   const query = useClinicalNote(patient.id, request);
   const response = query.data ?? null;
 
-  const viewState: ClinicalNoteViewState = query.isPending
-    ? { kind: "loading" }
-    : query.isError
-      ? { kind: "error", error: query.error }
-      : query.data
-        ? { kind: "ready", response: query.data }
-        : { kind: "loading" };
+  const viewState: ClinicalNoteViewState =
+    query.isPending || query.isFetching
+      ? { kind: "loading" }
+      : query.isError
+        ? { kind: "error", error: query.error }
+        : query.data
+          ? { kind: "ready", response: query.data }
+          : { kind: "loading" };
 
   // Stamped when the note arrives, so sign-off does not overwrite it.
   const generatedAt = useMemo(

@@ -26,7 +26,7 @@ function SidebarContent({ collapsed, onNavigate, onToggle }: { collapsed: boolea
       <div className={cn("h-14 flex items-center border-b border-sidebar-border flex-shrink-0", collapsed ? "justify-center px-2" : "justify-between px-4")}>
         <div className={cn("flex items-center gap-2", collapsed && "justify-center")}>
           <div className="rounded-lg flex items-center justify-center flex-shrink-0">
-            <img src="/public/KneeXpert.png" alt="KneeXpert" className="w-10 h-10" />
+            <img src="/KneeXpert.png" alt="KneeXpert" className="w-10 h-10" />
           </div>
           {!collapsed && (
             <motion.span
@@ -104,7 +104,7 @@ function SidebarContent({ collapsed, onNavigate, onToggle }: { collapsed: boolea
             title="View Profile"
           >
             <div className="rounded-lg flex items-center justify-center flex-shrink-0">
-             <img src="/public/KneeXpert.png" alt="KneeXpert" className="w-8 h-8" />
+             <img src="/KneeXpert.png" alt="KneeXpert" className="w-8 h-8" />
             </div>
             {!collapsed && (
               <div className="flex-1 min-w-0 text-left">

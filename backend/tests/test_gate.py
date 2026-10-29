@@ -126,8 +126,23 @@ def test_per_class_score_is_none_when_that_class_is_absent() -> None:
     assert outcome.next_steps_groundedness is None
 
 
-def test_per_class_scores_do_not_gate() -> None:
-    """Only the aggregate gates, pending the data to justify anything finer."""
+# ── Per-class gating (decision 17) ────────────────────────────────────────────
+
+
+def test_strong_next_steps_cannot_rescue_a_weak_synthesis() -> None:
+    """The case that retired the pooled mean.
+
+    Four weak synthesis sentences and three well-supported generic steps pool to
+    0.63, which cleared a 0.60 bar — serving a wrong diagnosis on the strength of
+    "correlate with symptoms".
+    """
+    note = [score(0.35, cls="synthesis")] * 4 + [score(1.0, cls="next_step")] * 3
+    outcome = evaluate(note, threshold=0.60, next_steps_threshold=0.60)
+    assert outcome.groundedness == pytest.approx(0.6286, abs=1e-4)
+    assert not outcome.passed
+
+
+def test_weak_next_steps_fail_a_note_with_a_strong_synthesis() -> None:
     outcome = evaluate(
         [
             score(0.95, cls="synthesis"),
@@ -137,7 +152,70 @@ def test_per_class_scores_do_not_gate() -> None:
         threshold=0.70,
     )
     assert outcome.next_steps_groundedness == pytest.approx(0.2)
-    assert outcome.passed
+    assert not outcome.passed
+
+
+def test_a_lower_next_steps_threshold_admits_weaker_recommendations() -> None:
+    note = [score(0.9, cls="synthesis"), score(0.45, cls="next_step")]
+    assert not evaluate(note, threshold=0.60, next_steps_threshold=0.60).passed
+    assert evaluate(note, threshold=0.60, next_steps_threshold=0.40).passed
+
+
+def test_zero_next_steps_threshold_is_synthesis_only_gating() -> None:
+    """Option (a) is a corner of the same rule, not a separate code path."""
+    note = [score(0.9, cls="synthesis"), score(0.0, cls="next_step")]
+    assert evaluate(note, threshold=0.60, next_steps_threshold=0.0).passed
+
+
+def test_next_steps_threshold_defaults_to_the_synthesis_threshold() -> None:
+    outcome = evaluate([score(0.9, cls="synthesis")], threshold=0.65)
+    assert outcome.next_steps_threshold == 0.65
+    assert outcome.effective_next_steps_threshold == 0.65
+
+
+def test_both_thresholds_are_recorded_on_the_outcome() -> None:
+    outcome = evaluate(
+        [score(0.9, cls="synthesis")], threshold=0.65, next_steps_threshold=0.5
+    )
+    assert (outcome.threshold, outcome.next_steps_threshold) == (0.65, 0.5)
+
+
+def test_a_note_without_next_steps_is_judged_on_its_synthesis() -> None:
+    assert evaluate([score(0.8, cls="synthesis")], threshold=0.60).passed
+
+
+def test_recommendations_without_a_synthesis_never_pass() -> None:
+    assert not evaluate([score(1.0, cls="next_step")], threshold=0.0).passed
+
+
+def test_each_class_is_exactly_at_its_threshold_passes() -> None:
+    note = [score(0.60, cls="synthesis"), score(0.40, cls="next_step")]
+    assert evaluate(note, threshold=0.60, next_steps_threshold=0.40).passed
+
+
+def test_rejected_sentences_are_judged_against_their_own_class() -> None:
+    """The retry hint must name what failed *its* bar, or attempt 2 is asked to
+    fix a recommendation the gate had accepted."""
+    outcome = evaluate(
+        [
+            score(0.5, text="Weak synthesis.", cls="synthesis"),
+            score(0.5, text="Acceptable step.", cls="next_step"),
+            score(0.2, text="Weak step.", cls="next_step"),
+        ],
+        threshold=0.60,
+        next_steps_threshold=0.40,
+    )
+    assert outcome.rejected_sentences == ["Weak step.", "Weak synthesis."]
+
+
+def test_passes_is_the_rule_the_sweep_replays() -> None:
+    from rag.gate import passes
+
+    assert passes(0.7, None, 0.6, 0.6)
+    assert passes(0.7, 0.5, 0.6, 0.5)
+    assert not passes(0.7, 0.49, 0.6, 0.5)
+    assert not passes(0.59, 1.0, 0.6, 0.0)
+    assert not passes(None, 1.0, 0.0, 0.0)
 
 
 # ── Citation agreement ────────────────────────────────────────────────────────

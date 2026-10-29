@@ -20,7 +20,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
-import { groundingBand } from "@/lib/clinicalNote";
+import { noteGroundingBand } from "@/lib/clinicalNote";
 import { cn } from "@/lib/utils";
 import type {
   ClinicalNoteFallbackReason,
@@ -411,10 +411,7 @@ export function ClinicalNotePanel({
 
   const response = state.kind === "ready" ? state.response : null;
   const note = response?.clinical_note ?? null;
-  const band = groundingBand(
-    response?.grounding_score ?? null,
-    response?.gate_threshold,
-  );
+  const band = response ? noteGroundingBand(response) : "unknown";
   const signedOff = status === "accepted" || status === "edited";
 
   const passageNumber = (passageId: string | null | undefined) => {
@@ -669,8 +666,23 @@ export function ClinicalNotePanel({
                   threshold is provisional, so a bare number should not read as
                   a calibrated score at a glance. */}
               <p className="text-[10px] text-muted-foreground">
-                Groundedness {response?.grounding_score?.toFixed(3) ?? "n/a"} vs
-                threshold {response?.gate_threshold?.toFixed(2) ?? "n/a"} ·{" "}
+                {response?.synthesis_groundedness != null ? (
+                  <>
+                    Synthesis {response.synthesis_groundedness.toFixed(3)} vs{" "}
+                    {response.gate_threshold.toFixed(2)} · Next steps{" "}
+                    {response.next_steps_groundedness != null
+                      ? `${response.next_steps_groundedness.toFixed(3)} vs ${(
+                          response.next_steps_threshold ?? response.gate_threshold
+                        ).toFixed(2)}`
+                      : "none"}{" "}
+                    · overall {response.grounding_score?.toFixed(3) ?? "n/a"} ·{" "}
+                  </>
+                ) : (
+                  <>
+                    Groundedness {response?.grounding_score?.toFixed(3) ?? "n/a"} vs
+                    threshold {response?.gate_threshold?.toFixed(2) ?? "n/a"} ·{" "}
+                  </>
+                )}
                 {plural(response?.gate_attempts ?? 0, "attempt")} ·{" "}
                 {response?.generated_by}
               </p>

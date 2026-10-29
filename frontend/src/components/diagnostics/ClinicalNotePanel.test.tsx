@@ -85,6 +85,26 @@ describe("ClinicalNotePanel", () => {
     expect(screen.getByText(/Definite joint space narrowing/)).toBeInTheDocument();
   });
 
+  it("shows each part's score against its own threshold in the evidence", () => {
+    renderPanel({
+      state: {
+        kind: "ready",
+        response: {
+          ...WITH_NOTE,
+          synthesis_groundedness: 0.812,
+          next_steps_groundedness: 0.455,
+          next_steps_threshold: 0.4,
+        },
+      },
+    });
+    // Passed both bars, so supported — even though 0.455 < the 0.60 synthesis bar.
+    expect(screen.getByText("Evidence-supported")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Show evidence/ }));
+    const evidence = screen.getByTestId("clinical-note-evidence");
+    expect(evidence.textContent).toMatch(/Synthesis 0\.812 vs 0\.60/);
+    expect(evidence.textContent).toMatch(/Next steps 0\.455 vs 0\.40/);
+  });
+
   describe("when the note was withheld", () => {
     const rejected: ClinicalNoteResponse = {
       ...BASE,

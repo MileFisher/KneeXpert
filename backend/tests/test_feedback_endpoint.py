@@ -122,6 +122,18 @@ def test_returns_a_note_with_real_retrieved_passages(
     assert passage["text"] and passage["licence"] and passage["source"]
 
 
+def test_reports_both_thresholds_and_both_part_scores(
+    client, fake_llm, pass_gate
+) -> None:
+    """The panel bands each part against its own threshold; it needs all four."""
+    fake_llm(raw=GROUNDED_JSON)
+    body = client.post("/api/feedback/generate", json=MRI_PAYLOAD).json()
+    assert body["gate_threshold"] > 0
+    assert body["next_steps_threshold"] > 0
+    assert body["synthesis_groundedness"] == pytest.approx(0.95)
+    assert body["next_steps_groundedness"] == pytest.approx(0.95)
+
+
 def test_xray_payload_needs_no_labels(client, fake_llm, pass_gate) -> None:
     fake_llm(raw=GROUNDED_JSON)
     r = client.post(

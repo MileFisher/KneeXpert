@@ -7,29 +7,70 @@ the 740 MB cross-encoder means they are testable in milliseconds.
 
 The policy, from the project's own §2.9: every clinical statement must be
 explicitly supported by the retrieved evidence. Sentences are scored
-individually; the note's score is the mean of the per-sentence maxima, so one
-fabricated claim among several supported ones still drags the note down rather
-than being averaged into invisibility.
+individually, then averaged *within each part of the note*: the synthesis must
+clear its threshold and the next steps must clear theirs (decision 17). One
+fabricated claim still drags its part down rather than being averaged into
+invisibility, and well-supported generic recommendations can no longer carry a
+wrong diagnosis, which a single pooled mean allowed.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Literal
+from typing import Iterable, Literal
 
-from rag.config import GROUNDEDNESS_TAU, RETRY_TEMPERATURES, TOP_K, TOP_K_RETRY
+from rag.config import RETRY_TEMPERATURES, SYNTHESIS_TAU, TOP_K, TOP_K_RETRY
 
 EntailmentLabel = Literal["entailment", "neutral", "contradiction"]
 
 SentenceClass = Literal["synthesis", "next_step"]
 """Which part of the note a sentence came from.
 
-Tracked because the two behave differently against a corpus of research
-literature: a synthesis sentence restates findings, while a recommendation
-("refer for orthopaedic evaluation") is the kind of generic clinical advice that
-research prose supports only weakly. Reporting them separately is what lets the
-threshold policy be decided from data instead of guessed.
+Gated separately because the two behave differently against a corpus of
+research literature: a synthesis sentence restates findings, while a
+recommendation ("refer for orthopaedic evaluation") is the kind of generic
+clinical advice that research prose may support only weakly. A threshold per
+class is what lets the sweep measure that instead of guessing it.
 """
+
+
+def passes(
+    synthesis: float | None,
+    next_steps: float | None,
+    synthesis_threshold: float,
+    next_steps_threshold: float,
+) -> bool:
+    """The gate's verdict from per-class means. The single statement of the rule.
+
+    Shared by the live gate and the offline sweep, so a replayed verdict can never
+    drift from a production one.
+
+    A note with no synthesis fails: recommendations alone are not a note. A note
+    with no next steps is judged on its synthesis, since a note that recommends
+    nothing has made no recommendation to support.
+    """
+    if synthesis is None or synthesis < synthesis_threshold:
+        return False
+    return next_steps is None or next_steps >= next_steps_threshold
+
+
+def rejected_texts(
+    sentences: Iterable[tuple[str, SentenceClass, float]],
+    synthesis_threshold: float,
+    next_steps_threshold: float,
+) -> list[str]:
+    """Sentences below their own class's threshold, worst first.
+
+    Takes plain tuples so a resumed evaluation run can rebuild the same list from
+    stored rows that the live gate builds from :class:`SentenceScore`.
+    """
+    failing = [
+        (score, text)
+        for text, cls, score in sentences
+        if score
+        < (next_steps_threshold if cls == "next_step" else synthesis_threshold)
+    ]
+    return [text for _, text in sorted(failing, key=lambda item: item[0])]
 
 
 @dataclass(frozen=True)
@@ -58,22 +99,38 @@ class SentenceScore:
 
 @dataclass(frozen=True)
 class GateOutcome:
-    """The gate's verdict on one generated note."""
+    """The gate's verdict on one generated note.
+
+    ``groundedness`` is the pooled mean over every sentence. It no longer decides
+    the verdict — the per-class means do — but it stays the note-level figure the
+    RAG Triad reports.
+    """
 
     passed: bool
     groundedness: float
     threshold: float
     sentence_scores: list[SentenceScore] = field(default_factory=list)
+    next_steps_threshold: float | None = None
+    """None means the same bar as ``threshold``."""
+
+    @property
+    def effective_next_steps_threshold(self) -> float:
+        if self.next_steps_threshold is None:
+            return self.threshold
+        return self.next_steps_threshold
 
     @property
     def rejected_sentences(self) -> list[str]:
-        """Sentences below the threshold, worst first.
+        """Sentences below their class's threshold, worst first.
 
         Fed back verbatim into the retry prompt: naming the exact sentence gives
         the model more to act on than a paraphrased complaint.
         """
-        failing = [s for s in self.sentence_scores if s.groundedness < self.threshold]
-        return [s.text for s in sorted(failing, key=lambda s: s.groundedness)]
+        return rejected_texts(
+            ((s.text, s.sentence_class, s.groundedness) for s in self.sentence_scores),
+            self.threshold,
+            self.effective_next_steps_threshold,
+        )
 
     @property
     def synthesis_groundedness(self) -> float | None:
@@ -121,20 +178,25 @@ def aggregate(scores: list[SentenceScore]) -> float:
 
 
 def evaluate(
-    scores: list[SentenceScore], threshold: float = GROUNDEDNESS_TAU
+    scores: list[SentenceScore],
+    threshold: float = SYNTHESIS_TAU,
+    next_steps_threshold: float | None = None,
 ) -> GateOutcome:
     """Decide whether a note passes.
 
-    Gates on the aggregate only. The per-class figures are recorded but do not
-    gate, pending the data needed to choose between one threshold and separate
-    thresholds per sentence class.
+    The synthesis mean must clear ``threshold`` and the next-steps mean must
+    clear ``next_steps_threshold``, which defaults to the same bar. Callers that
+    serve notes pass both explicitly from config.
     """
-    groundedness = aggregate(scores)
+    synthesis = _mean_of([s for s in scores if s.sentence_class == "synthesis"])
+    next_steps = _mean_of([s for s in scores if s.sentence_class == "next_step"])
+    steps_bar = threshold if next_steps_threshold is None else next_steps_threshold
     return GateOutcome(
-        passed=bool(scores) and groundedness >= threshold,
-        groundedness=groundedness,
+        passed=passes(synthesis, next_steps, threshold, steps_bar),
+        groundedness=aggregate(scores),
         threshold=threshold,
         sentence_scores=list(scores),
+        next_steps_threshold=steps_bar,
     )
 
 

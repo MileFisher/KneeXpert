@@ -23,10 +23,11 @@ from typing import Any
 
 from rag.config import (
     GEN_SEED,
-    GROUNDEDNESS_TAU,
     MAX_RETRIES,
+    NEXT_STEPS_TAU,
     OLLAMA_MODEL,
     RETRY_TEMPERATURES,
+    SYNTHESIS_TAU,
     TOP_K,
     TOP_K_RETRY,
 )
@@ -216,7 +217,11 @@ def run_attempt(
     # §2.9's "patient record and retrieved guidelines". Gate-only: never reported
     # as retrieved, never counted in context relevance.
     premises = [findings_premise(req), *passages]
-    outcome = evaluate(groundedness(sentences, premises), threshold=GROUNDEDNESS_TAU)
+    outcome = evaluate(
+        groundedness(sentences, premises),
+        threshold=SYNTHESIS_TAU,
+        next_steps_threshold=NEXT_STEPS_TAU,
+    )
     triad = _triad_for(req, note, passages, outcome, include_passages)
     gate_ms = int((time.monotonic() - t) * 1000)
 
@@ -279,7 +284,8 @@ def generate_clinical_note(
         mark("total", started)
         kwargs.setdefault("retrieved_passages", passages)
         return FeedbackGenerateResponse(
-            gate_threshold=GROUNDEDNESS_TAU,
+            gate_threshold=SYNTHESIS_TAU,
+            next_steps_threshold=NEXT_STEPS_TAU,
             config=req.config,
             latency_ms=latency,
             **kwargs,
@@ -344,6 +350,8 @@ def generate_clinical_note(
                 gate_attempts=attempts,
                 parse_mode=result.parse_mode,
                 grounding_score=outcome.groundedness,
+                synthesis_groundedness=outcome.synthesis_groundedness,
+                next_steps_groundedness=outcome.next_steps_groundedness,
                 triad=result.triad,
             )
 
@@ -360,4 +368,6 @@ def generate_clinical_note(
         fallback_reason="gate_rejected",
         gate_attempts=attempts,
         grounding_score=last_outcome.groundedness,
+        synthesis_groundedness=last_outcome.synthesis_groundedness,
+        next_steps_groundedness=last_outcome.next_steps_groundedness,
     )

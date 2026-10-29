@@ -112,10 +112,16 @@ class FeedbackGenerateResponse(BaseModel):
     clinical_note: ClinicalNote | None = None
     generated_by: str | None = None
     grounding_score: float | None = None
+    """Pooled mean over every sentence. Reported, but no longer what gates."""
+    synthesis_groundedness: float | None = None
+    next_steps_groundedness: float | None = None
+    """None when the note made no recommendations."""
     triad: TriadScores | None = None
     retrieved_passages: list[RetrievedPassage] = Field(default_factory=list)
     gate_attempts: int = 0
     gate_threshold: float
+    """The synthesis threshold."""
+    next_steps_threshold: float | None = None
     fallback_reason: FallbackReason | None = None
     parse_mode: ParseMode | None = None
     latency_ms: dict[str, int] = Field(default_factory=dict)

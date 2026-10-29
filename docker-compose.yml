@@ -21,7 +21,10 @@ services:
       # Must be explicit: Ollama otherwise defaults to 2048 and silently
       # truncates the prompt from the left, dropping the safety rules first.
       - OLLAMA_NUM_CTX=${OLLAMA_NUM_CTX:-8192}
-      - RAG_TAU=${RAG_TAU:-0.70}
+      - RAG_TAU=${RAG_TAU:-0.60}
+      # Passed through only when set in the shell; otherwise the backend falls
+      # back to RAG_TAU, so the two thresholds start out equal.
+      - RAG_TAU_NEXT_STEPS
     extra_hosts:
       # Makes host.docker.internal resolve on Linux hosts, where it is not
       # provided automatically as it is on Docker Desktop.

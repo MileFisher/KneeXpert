@@ -6,6 +6,7 @@ import {
   approvedNotes,
   groundingBand,
   noteAttributionLine,
+  noteGroundingBand,
 } from "./clinicalNote";
 import type { PatientReport, SignedClinicalNote } from "@/data/patients";
 
@@ -184,5 +185,60 @@ describe("groundingBand", () => {
 
   it("returns unknown when there is no score", () => {
     expect(groundingBand(null)).toBe("unknown");
+  });
+});
+
+describe("noteGroundingBand", () => {
+  // The invariant above, restated for two thresholds. With recommendations
+  // allowed a lower bar, a passing note can pool below the synthesis bar —
+  // here 0.65 and 0.45 at 0.60 / 0.40 — and banding the pooled score would
+  // call an accepted note "partially supported".
+  it("never labels a note that passed both bars as less than supported", () => {
+    for (const [tauS, tauN] of [
+      [0.6, 0.6],
+      [0.6, 0.4],
+      [0.7, 0.3],
+      [0.85, 0.0],
+    ]) {
+      expect(
+        noteGroundingBand({
+          grounding_score: (tauS + tauN) / 2,
+          gate_threshold: tauS,
+          synthesis_groundedness: tauS,
+          next_steps_groundedness: tauN,
+          next_steps_threshold: tauN,
+        }),
+      ).toBe("supported");
+    }
+  });
+
+  it("takes the weaker of the two parts", () => {
+    expect(
+      noteGroundingBand({
+        grounding_score: 0.8,
+        gate_threshold: 0.6,
+        synthesis_groundedness: 0.95,
+        next_steps_groundedness: 0.2,
+        next_steps_threshold: 0.6,
+      }),
+    ).toBe("weak");
+  });
+
+  it("judges a note with no next steps on its synthesis", () => {
+    expect(
+      noteGroundingBand({
+        grounding_score: 0.7,
+        gate_threshold: 0.6,
+        synthesis_groundedness: 0.7,
+        next_steps_groundedness: null,
+        next_steps_threshold: 0.6,
+      }),
+    ).toBe("supported");
+  });
+
+  it("falls back to the pooled score from an older backend", () => {
+    expect(noteGroundingBand({ grounding_score: 0.5, gate_threshold: 0.6 })).toBe(
+      "partial",
+    );
   });
 });

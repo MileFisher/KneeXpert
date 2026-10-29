@@ -3,6 +3,7 @@ import type {
   PatientReport,
   SignedClinicalNote,
 } from "@/data/patients";
+import type { ClinicalNoteResponse } from "@/lib/diagnosticApi";
 
 /**
  * Pure helpers for the AI clinical note and its physician sign-off.
@@ -39,6 +40,46 @@ export function groundingBand(
   // Within three-quarters of the bar: short of it, but not unsupported.
   if (score >= threshold * 0.75) return "partial";
   return "weak";
+}
+
+const BAND_ORDER: readonly GroundingBand[] = ["weak", "partial", "supported"];
+
+/**
+ * The band for a whole note: the weaker of its two parts, each judged against
+ * its own threshold.
+ *
+ * The gate passes a note only when both parts clear their bars, so a passing
+ * note always bands as supported here. Banding the pooled score instead would
+ * break that once the recommendation threshold sits below the synthesis one: a
+ * passing note can pool below the synthesis bar. Falls back to the pooled score
+ * when the backend predates per-part scoring.
+ */
+export function noteGroundingBand(
+  response: Pick<
+    ClinicalNoteResponse,
+    | "grounding_score"
+    | "gate_threshold"
+    | "synthesis_groundedness"
+    | "next_steps_groundedness"
+    | "next_steps_threshold"
+  >,
+): GroundingBand {
+  const synthesis = response.synthesis_groundedness;
+  if (synthesis == null) {
+    return groundingBand(response.grounding_score ?? null, response.gate_threshold);
+  }
+  const bands = [groundingBand(synthesis, response.gate_threshold)];
+  if (response.next_steps_groundedness != null) {
+    bands.push(
+      groundingBand(
+        response.next_steps_groundedness,
+        response.next_steps_threshold ?? response.gate_threshold,
+      ),
+    );
+  }
+  return bands.reduce((worst, band) =>
+    BAND_ORDER.indexOf(band) < BAND_ORDER.indexOf(worst) ? band : worst,
+  );
 }
 
 /**

@@ -90,15 +90,24 @@ NLI_BATCH_SIZE = 16
 NLI_MAX_LENGTH = 384
 NLI_PREMISE_TOP_N = 3  # per sentence, pre-filtered by embedding cosine
 
+# Decision 17: the synthesis and the next steps are gated independently, each
+# against its own threshold. A pooled mean let strong generic recommendations
+# carry a wrong diagnosis: at 4 + 3 sentences, synthesis 0.35 with steps 1.0
+# averages 0.63 and passed.
+#
 # PROVISIONAL. 0.70 was picked before any measurement and rejected every note,
 # including well-grounded ones. Measured on the current corpus a grounded note
 # scores 0.698 and a deliberately fabricated one 0.026, so any threshold between
 # them separates the two; 0.60 leaves margin on both sides.
 #
 # This is tuned against a handful of examples and should not be reported as a
-# chosen operating point. The defensible value comes from the Phase 4 sweep over
-# the full payload set, replayed offline against stored per-sentence scores.
-GROUNDEDNESS_TAU = float(os.getenv("RAG_TAU", "0.60"))
+# chosen operating point. The defensible values come from the Phase 4 sweep over
+# the (synthesis, next-steps) threshold plane, replayed offline against stored
+# per-sentence scores.
+SYNTHESIS_TAU = float(os.getenv("RAG_TAU", "0.60"))
+# Defaults to the synthesis threshold, so one shared bar is the starting point
+# and a lower one for recommendations has to be earned from the sweep.
+NEXT_STEPS_TAU = float(os.getenv("RAG_TAU_NEXT_STEPS", str(SYNTHESIS_TAU)))
 MAX_RETRIES = 2  # 3 attempts total
 
 # Attempt -> temperature. Attempt 3 also re-retrieves at TOP_K_RETRY.

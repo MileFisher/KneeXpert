@@ -130,15 +130,24 @@ def test_load_resumed_on_a_missing_file_is_empty(tmp_path) -> None:
 # ── Threshold sweep ───────────────────────────────────────────────────────────
 
 
-def rows_for(case_id: str, scores: list[float], config: str = "rag_gate") -> list[dict]:
+def rows_for(
+    case_id: str,
+    scores: list[float],
+    config: str = "rag_gate",
+    next_steps: list[float | None] | None = None,
+) -> list[dict]:
+    """Stored attempts. ``scores`` are synthesis means; next steps optional."""
+    steps = next_steps or [None] * len(scores)
     return [
         {
             "case_id": case_id,
             "config": config,
             "attempt": index,
             "groundedness": score,
+            "synthesis_groundedness": score,
+            "next_steps_groundedness": step,
         }
-        for index, score in enumerate(scores)
+        for index, (score, step) in enumerate(zip(scores, steps, strict=True))
     ]
 
 
@@ -203,6 +212,92 @@ def test_sweep_covers_the_documented_range() -> None:
     series = sweep(rows_for("c1", [0.5]), "rag_gate")
     assert series[0].tau == pytest.approx(0.50)
     assert series[-1].tau == pytest.approx(0.95)
+
+
+# ── Two thresholds (decision 17) ──────────────────────────────────────────────
+
+
+def test_replay_requires_both_parts_to_clear() -> None:
+    rows = rows_for("c1", [0.90], next_steps=[0.30])
+    assert replay_config(rows, "rag_gate", tau=0.60).served == 0
+    assert replay_config(rows, "rag_gate", tau=0.60, next_steps_tau=0.30).served == 1
+
+
+def test_diagonal_sweep_moves_both_thresholds_together() -> None:
+    series = sweep(rows_for("c1", [0.9], next_steps=[0.55]), "rag_gate")
+    for row in series:
+        assert row.next_steps_tau == row.tau
+        assert row.served == (1 if row.tau <= 0.55 else 0)
+
+
+def test_grid_zero_column_is_synthesis_only_gating() -> None:
+    from rag.eval.sweep_tau import sweep_grid
+
+    rows = rows_for("c1", [0.9], next_steps=[0.0])
+    cells = {(r.tau, r.next_steps_tau): r for r in sweep_grid(rows, "rag_gate")}
+    assert cells[(0.6, 0.0)].served == 1
+    assert cells[(0.6, 0.05)].served == 0
+
+
+def test_grid_serve_rate_never_rises_with_either_threshold() -> None:
+    from rag.eval.sweep_tau import GRID_NEXT_STEPS_TAUS, GRID_SYNTHESIS_TAUS, sweep_grid
+
+    rows = (
+        rows_for("c1", [0.55, 0.80], next_steps=[0.9, 0.2])
+        + rows_for("c2", [0.95, 0.70], next_steps=[0.4, 0.65])
+        + rows_for("c3", [0.62, 0.61], next_steps=[None, 0.1])
+    )
+    rate = {(r.tau, r.next_steps_tau): r.serve_rate for r in sweep_grid(rows, "rag_gate")}
+    for s, n in zip(GRID_SYNTHESIS_TAUS, GRID_SYNTHESIS_TAUS[1:]):
+        for t in GRID_NEXT_STEPS_TAUS:
+            assert rate[(n, t)] <= rate[(s, t)]
+    for t, u in zip(GRID_NEXT_STEPS_TAUS, GRID_NEXT_STEPS_TAUS[1:]):
+        for s in GRID_SYNTHESIS_TAUS:
+            assert rate[(s, u)] <= rate[(s, t)]
+
+
+def test_first_attempt_failures_are_attributed_to_each_part() -> None:
+    """The question decision 17 was raised to answer: what does the gate fire on."""
+    rows = (
+        rows_for("synth-weak", [0.3], next_steps=[0.9])
+        + rows_for("steps-weak", [0.9], next_steps=[0.3])
+        + rows_for("both-weak", [0.3], next_steps=[0.3])
+        + rows_for("no-steps", [0.9])
+    )
+    result = replay_config(rows, "rag_gate", tau=0.60)
+    assert result.first_failed_synthesis == 2
+    assert result.first_failed_next_steps == 2
+    assert result.served == 1
+
+
+def test_revision_hint_judges_each_class_against_its_recorded_threshold() -> None:
+    from rag.eval.run_ablation import revision_hint_from_row
+
+    row = {
+        "run_time_tau": 0.6,
+        "run_time_tau_next_steps": 0.4,
+        "sentence_scores": [
+            {"text": "Weak synthesis.", "sentence_class": "synthesis", "groundedness": 0.5},
+            {"text": "Accepted step.", "sentence_class": "next_step", "groundedness": 0.5},
+        ],
+    }
+    hint = revision_hint_from_row(row)
+    assert hint is not None
+    assert "Weak synthesis." in hint
+    assert "Accepted step." not in hint
+
+
+def test_rows_from_before_per_class_gating_reuse_the_single_threshold() -> None:
+    from rag.eval.run_ablation import revision_hint_from_row
+
+    row = {
+        "run_time_tau": 0.6,
+        "sentence_scores": [
+            {"text": "Weak step.", "sentence_class": "next_step", "groundedness": 0.5},
+        ],
+    }
+    hint = revision_hint_from_row(row)
+    assert hint is not None and "Weak step." in hint
 
 
 # ── The committed artefact must match the generator ──────────────────────────

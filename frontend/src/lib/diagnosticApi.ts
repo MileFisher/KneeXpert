@@ -349,12 +349,22 @@ export type ClinicalNoteResponse = {
    */
   clinical_note: ClinicalNote | null;
   generated_by: string | null;
+  /** Pooled mean over every sentence. Reported, but no longer what gates. */
   grounding_score: number | null;
+  /**
+   * The gate judges the synthesis and the next steps separately, each against
+   * its own threshold. Optional so an older backend still type-checks.
+   */
+  synthesis_groundedness?: number | null;
+  /** Null when the note made no recommendations. */
+  next_steps_groundedness?: number | null;
   triad: TriadScores | null;
   /** Populated even when the note is withheld. */
   retrieved_passages: RetrievedPassage[];
   gate_attempts: number;
+  /** The synthesis threshold. */
   gate_threshold: number;
+  next_steps_threshold?: number | null;
   fallback_reason: ClinicalNoteFallbackReason | null;
   parse_mode: ClinicalNoteParseMode | null;
   latency_ms: Record<string, number>;

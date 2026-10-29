@@ -85,6 +85,26 @@ describe("ClinicalNotePanel", () => {
     expect(screen.getByText(/Definite joint space narrowing/)).toBeInTheDocument();
   });
 
+  it("shows each part's score against its own threshold in the evidence", () => {
+    renderPanel({
+      state: {
+        kind: "ready",
+        response: {
+          ...WITH_NOTE,
+          synthesis_groundedness: 0.812,
+          next_steps_groundedness: 0.455,
+          next_steps_threshold: 0.4,
+        },
+      },
+    });
+    // Passed both bars, so supported — even though 0.455 < the 0.60 synthesis bar.
+    expect(screen.getByText("Evidence-supported")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: /Show evidence/ }));
+    const evidence = screen.getByTestId("clinical-note-evidence");
+    expect(evidence.textContent).toMatch(/Synthesis 0\.812 vs 0\.60/);
+    expect(evidence.textContent).toMatch(/Next steps 0\.455 vs 0\.40/);
+  });
+
   describe("when the note was withheld", () => {
     const rejected: ClinicalNoteResponse = {
       ...BASE,
@@ -109,6 +129,23 @@ describe("ClinicalNotePanel", () => {
       }
       expect(screen.queryByTestId("clinical-note-body")).not.toBeInTheDocument();
     });
+
+    // A static reference list in the gap reads as the system's own evidence for
+    // this case, and it bypasses the corpus licence gate.
+    it.each(["gate_rejected", "llm_unavailable"] as const)(
+      "shows no substitute reference list when %s",
+      reason => {
+        renderPanel({
+          state: {
+            kind: "ready",
+            response: { ...BASE, fallback_reason: reason, gate_attempts: 3 },
+          },
+        });
+        expect(screen.queryByText(/Verified Literature/i)).not.toBeInTheDocument();
+        expect(screen.queryByText(/Kellgren JH/)).not.toBeInTheDocument();
+        expect(screen.queryAllByRole("link")).toHaveLength(0);
+      },
+    );
 
     it("offers no sign-off actions, since there is nothing to sign off", () => {
       renderPanel({ state: { kind: "ready", response: rejected } });
@@ -229,5 +266,92 @@ describe("ClinicalNotePanel", () => {
       state: { kind: "error", error: new Error("Retrieval index is empty.") },
     });
     expect(screen.getByText(/Retrieval index is empty/)).toBeInTheDocument();
+    expect(screen.queryByText(/Verified Literature/i)).not.toBeInTheDocument();
+    expect(screen.queryAllByRole("link")).toHaveLength(0);
+  });
+
+  describe("citations", () => {
+    const passages = [
+      {
+        passage_id: "kl-grading#04-00",
+        source: "KL grading — Grade 3",
+        text: "Definite joint space narrowing, usually medial.",
+        score: 1,
+        licence: "internal",
+        source_type: "internal",
+      },
+      {
+        passage_id: "PMC4772126#01-01",
+        source: "Symptom–structure discordance",
+        text: "Radiographic severity correlates weakly with pain.",
+        score: 0.8,
+        licence: "CC BY 4.0",
+        source_type: "pmc",
+        url: "https://pmc.ncbi.nlm.nih.gov/articles/PMC4772126/",
+      },
+    ];
+
+    // The model wrote [1] on both, but the entailment model found passage 2
+    // supporting the step. Only the derived source may be shown.
+    const cited: ClinicalNoteResponse = {
+      ...BASE,
+      retrieved_passages: passages,
+      clinical_note: {
+        synthesis: "Grade 3 change with medial narrowing [1]. Effusion is present [1].",
+        next_steps: ["Correlate with reported symptoms [1]."],
+        sentences: [
+          {
+            text: "Grade 3 change with medial narrowing [1].",
+            groundedness: 0.91,
+            label: "entailment",
+            supporting_passage_id: "kl-grading#04-00",
+            cited_marker: 1,
+          },
+          {
+            text: "Effusion is present [1].",
+            groundedness: 0.12,
+            label: "neutral",
+            supporting_passage_id: "kl-grading#04-00",
+            cited_marker: 1,
+          },
+          {
+            text: "Correlate with reported symptoms [1].",
+            groundedness: 0.88,
+            label: "entailment",
+            supporting_passage_id: "PMC4772126#01-01",
+            cited_marker: 1,
+          },
+        ],
+      },
+    };
+
+    it("links each sentence to its entailed passage, not the model's marker", () => {
+      renderPanel({ state: { kind: "ready", response: cited } });
+      const link = screen.getByRole("link", { name: /Supporting evidence \[2\]/ });
+      expect(link).toHaveAttribute(
+        "href",
+        "https://pmc.ncbi.nlm.nih.gov/articles/PMC4772126/",
+      );
+      expect(
+        screen.getByRole("button", { name: /Supporting evidence \[1\]/ }),
+      ).toBeInTheDocument();
+    });
+
+    it("gives an unsupported sentence no citation", () => {
+      renderPanel({ state: { kind: "ready", response: cited } });
+      // Two supported sentences, two badges; the neutral one gets none.
+      const badges = [
+        ...screen.queryAllByRole("link", { name: /Supporting evidence/ }),
+        ...screen.queryAllByRole("button", { name: /Supporting evidence/ }),
+      ];
+      expect(badges).toHaveLength(2);
+    });
+
+    it("never shows the model's own markers in the note text", () => {
+      renderPanel({ state: { kind: "ready", response: WITH_NOTE } });
+      const body = screen.getByTestId("clinical-note-body");
+      expect(body.textContent).not.toMatch(/\[1\]/);
+      expect(screen.getByText(/Grade 3 change with medial narrowing\./)).toBeInTheDocument();
+    });
   });
 });

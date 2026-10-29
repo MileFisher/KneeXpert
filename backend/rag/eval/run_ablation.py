@@ -41,16 +41,15 @@ from typing import Any, Iterator
 
 from rag.config import (
     EVAL_RESULTS_DIR,
-    GROUNDEDNESS_TAU,
     MAX_RETRIES,
+    NEXT_STEPS_TAU,
     NLI_MODEL,
     OLLAMA_MODEL,
+    SYNTHESIS_TAU,
     TOP_K,
 )
 from rag.eval.payloads import PayloadCase, load_payloads
-from rag.gate import plan_attempt
-from rag.gate import plan_attempt
-from rag.gate import plan_attempt
+from rag.gate import plan_attempt, rejected_texts
 from rag.prompt import revision_hint_for
 from rag.schemas import FeedbackGenerateRequest, NoteConfig
 from rag.service import AttemptResult, run_attempt, to_schema
@@ -91,18 +90,27 @@ def load_resumed(path: Path) -> dict[str, dict[str, Any]]:
 def revision_hint_from_row(row: dict[str, Any]) -> str | None:
     """Rebuild a recorded attempt's revision hint from its stored scores.
 
-    Uses the threshold the row was *recorded at*, not the current one, so a
-    resumed run reproduces the prompt the original run would have produced.
+    Uses the thresholds the row was *recorded at*, not the current ones, so a
+    resumed run reproduces the prompt the original run would have produced. Rows
+    from before per-class gating carry one threshold, which applied to both.
     """
     tau = row.get("run_time_tau")
     scores = row.get("sentence_scores") or []
     if tau is None or not scores:
         return None
-    rejected = [
-        s["text"]
-        for s in sorted(scores, key=lambda s: s.get("groundedness") or 0.0)
-        if (s.get("groundedness") or 0.0) < tau
-    ]
+    tau_next_steps = row.get("run_time_tau_next_steps", tau)
+    rejected = rejected_texts(
+        (
+            (
+                s["text"],
+                s.get("sentence_class", "synthesis"),
+                s.get("groundedness") or 0.0,
+            )
+            for s in scores
+        ),
+        tau,
+        tau_next_steps,
+    )
     return revision_hint_for(rejected) if rejected else None
 
 
@@ -126,7 +134,8 @@ def _record(
         "confidence": case["confidence"],
         "label_count": len(case["positive_labels"]),
         "retrieval_k": result.retrieval_k,
-        "run_time_tau": GROUNDEDNESS_TAU,
+        "run_time_tau": SYNTHESIS_TAU,
+        "run_time_tau_next_steps": NEXT_STEPS_TAU,
         "failure": result.failure,
         "parse_mode": result.parse_mode,
         "passed_at_run_time_tau": bool(outcome and outcome.passed),

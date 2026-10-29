@@ -254,6 +254,7 @@ export function batchResultToApplyPayload(
     ensembleGradcamDataUrl: assets?.ensembleGradcamDataUrl,
     modelResults: assets?.modelResults,
     modalitySnapshots: buildModalitySnapshots(result),
+    fusion: result.fusion ?? undefined,
   };
 }
 

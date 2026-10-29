@@ -20,8 +20,9 @@ import json
 import sys
 from pathlib import Path
 from dataclasses import dataclass
-from typing import Any, TypedDict
+from typing import Any, NotRequired, TypedDict
 
+from orchestrator import StudyResult, fuse
 from rag.config import EVAL_PAYLOADS_PATH
 
 
@@ -39,6 +40,8 @@ class PayloadCase(TypedDict):
     confidence: float
     positive_labels: list[LabelSpec]
     patient_context: dict[str, Any]
+    studies: NotRequired[list[dict[str, Any]]]
+    """Combined cases only: one X-ray and one MRI study."""
 
 # Confidence bands, chosen to straddle the prompt's own calibration cut-offs:
 # below 70 is flagged as materially uncertain, 85 and above as high.
@@ -173,6 +176,21 @@ GRADE_LABELS: dict[int, tuple[tuple[tuple[str, float], ...], ...]] = {
 }
 
 
+# Which study the models are more sure of. With a two-grade gap these weights
+# move the weighted mean (e.g. 2.79 vs 3.21) but not the rounded fused grade, so
+# what the pair really exercises is the note: one study is flagged "materially
+# uncertain" in the prompt, and the note should lean on the other.
+CONFIDENCE_PAIRS: tuple[tuple[str, float, float], ...] = (
+    ("xray-sure", 94.0, 61.0),
+    ("mri-sure", 61.0, 94.0),
+)
+
+
+def discordant_mri_grade(xray_grade: int) -> int:
+    """An MRI grade two steps away — the disagreement worth a note's attention."""
+    return xray_grade + 2 if xray_grade <= 2 else xray_grade - 2
+
+
 def _case_id(
     modality: str, grade: int, combo_index: int, band: str, profile: str
 ) -> str:
@@ -229,6 +247,52 @@ def build_payloads() -> list[PayloadCase]:
                     }
                 )
 
+    # Combined: 5 X-ray grades x {concordant, discordant} x 2 confidence pairs = 20
+    for grade in range(5):
+        for agreement, mri_grade in (
+            ("agree", grade),
+            ("disagree", discordant_mri_grade(grade)),
+        ):
+            combo = GRADE_LABELS[mri_grade][0]
+            labels: list[LabelSpec] = [
+                {"name": name, "probability": probability}
+                for name, probability in combo
+            ]
+            for pair_index, (pair, xray_conf, mri_conf) in enumerate(
+                CONFIDENCE_PAIRS
+            ):
+                profile = PROFILES[(grade + mri_grade + pair_index) % len(PROFILES)]
+                studies = [
+                    {
+                        "modality": "xray",
+                        "grade": grade,
+                        "confidence": xray_conf,
+                        "positive_labels": [],
+                    },
+                    {
+                        "modality": "mri",
+                        "grade": mri_grade,
+                        "confidence": mri_conf,
+                        "positive_labels": labels,
+                    },
+                ]
+                # Recorded for readability; the request validator recomputes it.
+                fused = fuse([StudyResult.model_validate(st) for st in studies])
+                payloads.append(
+                    {
+                        "case_id": (
+                            f"combined-x{grade}-m{mri_grade}-{agreement}-"
+                            f"{pair}-{profile.key}"
+                        ),
+                        "modality": "combined",
+                        "grade": fused.grade,
+                        "confidence": fused.confidence,
+                        "positive_labels": labels,
+                        "patient_context": profile.as_context(),
+                        "studies": studies,
+                    }
+                )
+
     return payloads
 
 
@@ -272,6 +336,17 @@ def summarise(payloads: list[PayloadCase]) -> str:
         "  by grade:    " + ", ".join(f"{k}={v}" for k, v in sorted(by_grade.items()))
     )
     lines.append(f"  distinct SKM-TEA labels covered: {len(labels_seen)}/16")
+    combined = [c for c in payloads if c["modality"] == "combined"]
+    if combined:
+        discordant = sum(
+            1
+            for c in combined
+            if len({st["grade"] for st in c.get("studies", [])}) > 1
+        )
+        lines.append(
+            f"  combined: {len(combined) - discordant} concordant, "
+            f"{discordant} discordant"
+        )
     return "\n".join(lines)
 
 

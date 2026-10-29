@@ -270,7 +270,8 @@ export type BackboneHealth = {
 // Mirrors backend/rag/schemas.py. Additive: FeedbackBundle above is unchanged.
 
 /** Imaging modality, as the backend names it. */
-export type NoteModality = "xray" | "mri";
+/** A combined note reasons across one X-ray and one MRI of the same knee. */
+export type NoteModality = "xray" | "mri" | "combined";
 
 export type ClinicalNoteConfig = "ungrounded" | "rag_no_gate" | "rag_gate";
 
@@ -301,6 +302,11 @@ export type ClinicalNoteRequest = {
   positive_labels?: { name: string; probability: number }[];
   patient_context?: ClinicalNotePatientContext;
   config?: ClinicalNoteConfig;
+  /**
+   * Combined notes only: one X-ray and one MRI study. The backend recomputes
+   * `grade` and `confidence` from these, so the values sent above are ignored.
+   */
+  studies?: StudyResult[];
 };
 
 export type RetrievedPassage = {

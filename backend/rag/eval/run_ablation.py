@@ -188,6 +188,7 @@ def run_case(
         patient_context=case["patient_context"],  # type: ignore[arg-type]
         config=config,
         case_id=case["case_id"],
+        studies=case.get("studies", []),  # type: ignore[arg-type]
     )
     include_passages = config != "ungrounded"
 

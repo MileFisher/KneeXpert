@@ -15,13 +15,16 @@ graceful degradation.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Any, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # Owned by the orchestrator, which combines studies before any note is written.
 # Re-exported here so existing imports of rag.schemas.LabelProbability still work.
-from orchestrator import LabelProbability  # noqa: F401
+from orchestrator import FusionResult, LabelProbability, StudyResult, fuse
+
+NoteModality = Literal["xray", "mri", "combined"]
+"""A combined note reasons across one X-ray and one MRI of the same knee."""
 
 NoteConfig = Literal["ungrounded", "rag_no_gate", "rag_gate"]
 """Which pipeline to run. Only the evaluation varies this; production uses rag_gate."""
@@ -54,14 +57,57 @@ class PatientContext(BaseModel):
 
 
 class FeedbackGenerateRequest(BaseModel):
-    modality: Literal["xray", "mri"]
+    modality: NoteModality
     grade: int = Field(ge=0, le=4)
+    """For a combined note, always the orchestrator's fused grade."""
     confidence: float = Field(ge=0, le=100)
     positive_labels: list[LabelProbability] = Field(default_factory=list)
     patient_context: PatientContext | None = None
     config: NoteConfig = "rag_gate"
     case_id: str | None = None
     """Evaluation bookkeeping. Ignored in production."""
+    studies: list[StudyResult] = Field(default_factory=list)
+    """Combined notes only: exactly one X-ray and one MRI study."""
+
+    @model_validator(mode="before")
+    @classmethod
+    def _fuse_combined(cls, data: Any) -> Any:
+        """Derive a combined note's grade, confidence and labels on the server.
+
+        A client-supplied fused grade is never trusted: the grade, its confidence
+        and the MRI's labels are overwritten from the studies, so the note is
+        always about what the orchestrator would have said.
+        """
+        if not isinstance(data, dict) or data.get("modality") != "combined":
+            return data
+        studies = [StudyResult.model_validate(s) for s in data.get("studies") or []]
+        if sorted(s.modality for s in studies) != ["mri", "xray"]:
+            raise ValueError(
+                "A combined note needs exactly one X-ray and one MRI study."
+            )
+        fused = fuse(studies)
+        mri = next(s for s in studies if s.modality == "mri")
+        return {
+            **data,
+            "studies": studies,
+            "grade": fused.grade,
+            "confidence": fused.confidence,
+            "positive_labels": mri.positive_labels,
+        }
+
+    @model_validator(mode="after")
+    def _studies_only_when_combined(self) -> FeedbackGenerateRequest:
+        if self.modality != "combined" and self.studies:
+            raise ValueError("studies are only accepted for a combined note.")
+        return self
+
+    @property
+    def fusion(self) -> FusionResult | None:
+        """The orchestrator's result for a combined note; None otherwise."""
+        return fuse(self.studies) if self.modality == "combined" else None
+
+    def study(self, modality: Literal["xray", "mri"]) -> StudyResult | None:
+        return next((s for s in self.studies if s.modality == modality), None)
 
 
 class RetrievedPassage(BaseModel):

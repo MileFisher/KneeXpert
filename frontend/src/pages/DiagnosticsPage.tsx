@@ -738,6 +738,10 @@ function ClinicalInterpretation({
     return getFeedbackFindings(mod, grade, feedbackForMod(mod));
   };
 
+  // The orchestrator's own studies, with the MRI's labels: from this session's
+  // batch run, or stored on the report when the batch ran earlier.
+  const combinedStudies = batchResult?.fusion?.studies ?? patient.report?.fusion?.studies ?? [];
+
   // Recommendations: prefer batch feedback, fall back to grade-based
   const primaryFeedback = feedbackForMod("xray") ?? feedbackForMod("mri");
   const recommendations = getFeedbackRecommendations(analysis.finalGrade, primaryFeedback);
@@ -841,6 +845,18 @@ function ClinicalInterpretation({
           </div>
         )}
       </div>
+
+      {/* Combined note: only when the orchestrator fused one study of each kind. */}
+      {analysis.fused && combinedStudies.length === 2 && (
+        <ClinicalNoteSection
+          patient={patient}
+          modality="combined"
+          grade={analysis.finalGrade}
+          confidence={analysis.finalConfidence}
+          studies={combinedStudies}
+          title="Combined X-ray + MRI Note"
+        />
+      )}
 
       {!compact && (
         <div className="p-4 rounded-xl border bg-card">
@@ -1551,6 +1567,7 @@ function buildBatchConfirmPayload(
     ensembleGradcamDataUrl: payload?.ensembleGradcamDataUrl,
     modelResults: payload?.modelResults,
     modalitySnapshots: payload?.modalitySnapshots,
+    fusion: payload?.fusion,
     doctorOverride,
     overrideNotes,
   };

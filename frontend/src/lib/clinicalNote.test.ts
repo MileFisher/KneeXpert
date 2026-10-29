@@ -71,6 +71,18 @@ describe("applyNoteSignOff", () => {
     ]);
   });
 
+  it("keeps a combined note in its own slot beside both per-scan notes", () => {
+    const xray = note({ noteId: "x", modality: "xray" });
+    const mri = note({ noteId: "m", modality: "mri" });
+    const combined = note({ noteId: "c", modality: "combined" });
+    const next = applyNoteSignOff(report([xray, mri]), combined);
+    expect(next.clinicalNotes?.map((n) => n.modality).sort()).toEqual([
+      "combined",
+      "mri",
+      "xray",
+    ]);
+  });
+
   it("bumps the version and timestamp so the change is traceable", () => {
     const next = applyNoteSignOff(report(), note({ status: "accepted" }));
     expect(next.version).toBe(2);

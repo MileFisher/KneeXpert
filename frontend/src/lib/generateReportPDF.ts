@@ -5,6 +5,7 @@ import {
   approvedNoteText,
   approvedNotes,
   noteAttributionLine,
+  noteModalityLabel,
 } from "./clinicalNote";
 
 // KL grading criteria
@@ -141,7 +142,7 @@ export function generateReportPDF(patient: Patient): jsPDF {
   approvedNotes(report).forEach(note => {
     doc.setFont("helvetica", "bold");
     doc.setTextColor(23, 37, 84);
-    doc.text(`Clinical Note (${note.modality.toUpperCase()})`, margin, y);
+    doc.text(`Clinical Note (${noteModalityLabel(note.modality)})`, margin, y);
     y += 5;
 
     doc.setFont("helvetica", "italic");

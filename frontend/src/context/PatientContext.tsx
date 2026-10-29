@@ -9,6 +9,7 @@ import {
   type ReportModelSnapshot,
   type SignedClinicalNote,
 } from "@/data/patients";
+import type { FusionResult } from "@/lib/diagnosticApi";
 import { loadPatients, savePatients } from "@/lib/patientStorage";
 
 export type ConfirmDiagnosisPayload = {
@@ -25,6 +26,8 @@ export type ConfirmDiagnosisPayload = {
   ensembleGradcamDataUrl?: string | null;
   modelResults?: ReportModelSnapshot[];
   modalitySnapshots?: ModalityReportSnapshot[];
+  /** The orchestrator's result, when an X-ray and an MRI were combined. */
+  fusion?: FusionResult;
   doctorOverride?: boolean;
   overrideNotes?: string;
 };
@@ -167,6 +170,7 @@ export function PatientProvider({ children }: { children: ReactNode }) {
           ensembleGradcamDataUrl: payload.ensembleGradcamDataUrl,
           modelResults: payload.modelResults,
           modalitySnapshots: payload.modalitySnapshots,
+          fusion: payload.fusion,
           doctorConfirmed: false,
           doctorOverride: false,
           updatedAt: today,
@@ -216,6 +220,9 @@ export function PatientProvider({ children }: { children: ReactNode }) {
           ensembleGradcamDataUrl: payload.ensembleGradcamDataUrl ?? p.report?.ensembleGradcamDataUrl,
           modelResults: payload.modelResults ?? p.report?.modelResults,
           modalitySnapshots: payload.modalitySnapshots ?? p.report?.modalitySnapshots,
+          fusion: payload.fusion ?? p.report?.fusion,
+          // Confirming the grade must not discard notes already signed off.
+          clinicalNotes: p.report?.clinicalNotes,
           doctorConfirmed: true,
           doctorOverride: payload.doctorOverride ?? false,
           overrideNotes: payload.overrideNotes,

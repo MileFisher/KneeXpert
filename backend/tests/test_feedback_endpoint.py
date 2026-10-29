@@ -134,6 +134,35 @@ def test_reports_both_thresholds_and_both_part_scores(
     assert body["next_steps_groundedness"] == pytest.approx(0.95)
 
 
+COMBINED_PAYLOAD = {
+    "modality": "combined",
+    "grade": 0,
+    "confidence": 0,
+    "studies": [
+        {"modality": "xray", "grade": 2, "confidence": 90},
+        {"modality": "mri", **{k: v for k, v in MRI_PAYLOAD.items() if k != "modality"},
+         "grade": 4, "confidence": 60},
+    ],
+    "patient_context": MRI_PAYLOAD["patient_context"],
+}
+
+
+def test_combined_note_runs_through_real_retrieval(client, fake_llm, pass_gate) -> None:
+    fake_llm(raw=GROUNDED_JSON)
+    r = client.post("/api/feedback/generate", json=COMBINED_PAYLOAD)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["clinical_note"] is not None
+    ids = [p["passage_id"] for p in body["retrieved_passages"]]
+    # The X-ray grade's definition is pinned first, the fused grade's second.
+    assert ids[0].startswith("kl-grading#") and ids[1].startswith("kl-grading#")
+
+
+def test_combined_note_without_both_studies_is_rejected(client) -> None:
+    bad = {**COMBINED_PAYLOAD, "studies": COMBINED_PAYLOAD["studies"][:1]}
+    assert client.post("/api/feedback/generate", json=bad).status_code == 422
+
+
 def test_xray_payload_needs_no_labels(client, fake_llm, pass_gate) -> None:
     fake_llm(raw=GROUNDED_JSON)
     r = client.post(

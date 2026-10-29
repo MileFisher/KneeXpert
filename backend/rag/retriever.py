@@ -13,7 +13,11 @@ from rag.prompt import GRADE_LABEL
 from rag.schemas import FeedbackGenerateRequest
 from rag.store import RetrievedPassage, get_store
 
-MODALITY_PHRASE = {"xray": "on radiography", "mri": "on MRI"}
+MODALITY_PHRASE = {
+    "xray": "on radiography",
+    "mri": "on MRI",
+    "combined": "on radiography and MRI",
+}
 
 KL_GRADING_SOURCE_ID = "kl-grading"
 """The internal KL reference document, whose sections are looked up by grade."""
@@ -28,6 +32,18 @@ def grade_section_for(grade: int) -> str:
     return f"Grade {grade} — {GRADE_LABEL.get(grade, 'Unknown')}"
 
 
+def pinned_grades(req: FeedbackGenerateRequest) -> list[int]:
+    """KL grades whose definitions a note needs, most authoritative first.
+
+    For a combined note that is the X-ray grade — KL is a radiographic scale —
+    then the fused grade when it differs, since the note will state it too.
+    """
+    xray = req.study("xray")
+    if req.modality == "combined" and xray is not None:
+        return [xray.grade] if xray.grade == req.grade else [xray.grade, req.grade]
+    return [req.grade]
+
+
 def pinned_passages(req: FeedbackGenerateRequest) -> list[RetrievedPassage]:
     """Passages whose relevance follows from the payload, not from similarity.
 
@@ -38,10 +54,12 @@ def pinned_passages(req: FeedbackGenerateRequest) -> list[RetrievedPassage]:
     does not need to: the grade is a structured field, so the matching definition
     is fetched by key.
     """
-    passage = get_store().get_by_section(
-        KL_GRADING_SOURCE_ID, grade_section_for(req.grade)
+    store = get_store()
+    found = (
+        store.get_by_section(KL_GRADING_SOURCE_ID, grade_section_for(grade))
+        for grade in pinned_grades(req)
     )
-    return [passage] if passage is not None else []
+    return [passage for passage in found if passage is not None]
 
 
 def build_query(req: FeedbackGenerateRequest) -> str:

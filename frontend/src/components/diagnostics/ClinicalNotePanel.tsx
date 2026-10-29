@@ -59,6 +59,8 @@ export type ClinicalNoteViewState =
   | { kind: "error"; error: Error };
 
 type Props = {
+  /** Heading; distinguishes a combined note from a per-scan one. */
+  title?: string;
   state: ClinicalNoteViewState;
   /** Verdict already recorded for this modality, if any. */
   status: NoteReviewStatus | null;
@@ -395,6 +397,7 @@ function SynthesisText({
 }
 
 export function ClinicalNotePanel({
+  title = "Clinical Interpretation",
   state,
   status,
   reviewedText,
@@ -423,11 +426,11 @@ export function ClinicalNotePanel({
   };
 
   return (
-    <section className="p-4 rounded-xl border bg-card" aria-label="Clinical interpretation">
+    <section className="p-4 rounded-xl border bg-card" aria-label={title}>
       <div className="flex items-center justify-between gap-2 mb-3 flex-wrap">
         <div className="flex items-center gap-2 flex-wrap">
           <Stethoscope className="w-4 h-4 text-primary" aria-hidden="true" />
-          <h3 className="text-sm font-medium">Clinical Interpretation</h3>
+          <h3 className="text-sm font-medium">{title}</h3>
           <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
             AI-GENERATED
           </span>

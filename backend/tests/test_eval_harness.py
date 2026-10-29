@@ -57,9 +57,34 @@ def test_all_sixteen_skm_tea_labels_are_covered() -> None:
     assert seen == expected, f"uncovered: {sorted(expected - seen)}"
 
 
-def test_both_modalities_are_present() -> None:
+def test_every_note_kind_is_present() -> None:
     modalities = {case["modality"] for case in build_payloads()}
-    assert modalities == {"xray", "mri"}
+    assert modalities == {"xray", "mri", "combined"}
+
+
+def test_combined_cases_cover_agreement_and_disagreement_at_every_grade() -> None:
+    combined = [c for c in build_payloads() if c["modality"] == "combined"]
+    seen = {
+        (c["studies"][0]["grade"], c["studies"][0]["grade"] == c["studies"][1]["grade"])
+        for c in combined
+    }
+    assert seen == {(g, agree) for g in range(5) for agree in (True, False)}
+
+
+def test_combined_cases_carry_one_xray_and_one_mri_study() -> None:
+    for case in build_payloads():
+        if case["modality"] == "combined":
+            assert sorted(s["modality"] for s in case["studies"]) == ["mri", "xray"]
+
+
+def test_combined_cases_record_the_orchestrator_grade() -> None:
+    """The committed grade must be what the request validator will compute."""
+    from rag.schemas import FeedbackGenerateRequest
+
+    for case in build_payloads():
+        if case["modality"] == "combined":
+            req = FeedbackGenerateRequest.model_validate(case)
+            assert (req.grade, req.confidence) == (case["grade"], case["confidence"])
 
 
 def test_xray_cases_carry_no_labels() -> None:

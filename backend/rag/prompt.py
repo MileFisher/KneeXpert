@@ -61,7 +61,15 @@ NOTE_JSON_SCHEMA: dict[str, Any] = {
 MODALITY_LABEL = {
     "xray": "X-ray (CNN ensemble, soft-voting)",
     "mri": "MRI (MACS-Net artifact removal -> DeiT-Small multi-label)",
+    "combined": "X-ray and MRI of the same knee",
 }
+
+# Stated as a fact in both the prompt and the gate's findings premise, so the
+# model is told it and the gate can verify a sentence that repeats it.
+MRI_GRADE_CAVEAT = (
+    "The MRI grade is inferred from cartilage-lesion labels; it is not a "
+    "Kellgren-Lawrence reading."
+)
 
 # Reused rather than restated: the deterministic feedback engine already owns
 # the KL grade vocabulary, and two copies would drift.
@@ -93,7 +101,51 @@ def sorted_labels(req: FeedbackGenerateRequest) -> list[Any]:
     )
 
 
+def _combined_findings_block(req: FeedbackGenerateRequest) -> list[str]:
+    """Both studies, the fused grade, and whether they agree.
+
+    The disagreement is stated outright rather than left for the model to
+    notice, because a combined note that quietly reconciles two grades is the
+    failure this note exists to avoid.
+    """
+    xray, mri, fusion = req.study("xray"), req.study("mri"), req.fusion
+    assert xray is not None and mri is not None and fusion is not None
+    lines = [
+        "## FINDINGS",
+        f"Modality: {MODALITY_LABEL['combined']}",
+        f"{MODALITY_LABEL['xray']}: Kellgren-Lawrence grade {xray.grade} "
+        f"({GRADE_LABEL.get(xray.grade, 'Unknown')}), "
+        f"confidence {xray.confidence:.1f}%{_confidence_hint(xray.confidence)}",
+        f"{MODALITY_LABEL['mri']}: grade {mri.grade} "
+        f"({GRADE_LABEL.get(mri.grade, 'Unknown')}), "
+        f"confidence {mri.confidence:.1f}%{_confidence_hint(mri.confidence)}",
+    ]
+    if req.positive_labels:
+        lines.append("Positive SKM-TEA categories on MRI (probability, descending):")
+        lines.extend(
+            f"  - {lb.name}: {lb.probability:.1f}%" for lb in sorted_labels(req)
+        )
+    lines.append(
+        f"Combined grade (confidence-weighted): {fusion.grade} "
+        f"({GRADE_LABEL.get(fusion.grade, 'Unknown')})"
+    )
+    lines.append(_agreement_sentence(fusion.grade_gap))
+    lines.append(MRI_GRADE_CAVEAT)
+    return lines
+
+
+def _agreement_sentence(gap: int) -> str:
+    if gap == 0:
+        return "The X-ray and MRI grades agree."
+    return (
+        f"The X-ray and MRI grades disagree by {gap} "
+        f"grade{'s' if gap != 1 else ''}."
+    )
+
+
 def _findings_block(req: FeedbackGenerateRequest) -> list[str]:
+    if req.modality == "combined":
+        return _combined_findings_block(req)
     lines = [
         "## FINDINGS",
         f"Modality: {MODALITY_LABEL[req.modality]}",
@@ -118,19 +170,19 @@ def render_findings_premise(req: FeedbackGenerateRequest) -> str:
     rather than the prompt's bullet layout, because an entailment model reads
     prose far better than a list.
     """
-    parts = [
-        f"This study is a {MODALITY_LABEL[req.modality].split(' (')[0]} of the knee.",
-        f"The Kellgren-Lawrence grade is {req.grade} "
-        f"({GRADE_LABEL.get(req.grade, 'unknown')}).",
-        f"Model confidence is {req.confidence:.1f} percent"
-        f"{_confidence_hint(req.confidence)}.",
-    ]
-    if req.modality == "mri" and req.positive_labels:
-        named = ", ".join(
-            f"{label.name} at {label.probability:.1f} percent probability"
-            for label in sorted_labels(req)
-        )
-        parts.append(f"The following findings are positive: {named}.")
+    if req.modality == "combined":
+        parts = _combined_premise_parts(req)
+    else:
+        parts = [
+            f"This study is a {MODALITY_LABEL[req.modality].split(' (')[0]} "
+            "of the knee.",
+            f"The Kellgren-Lawrence grade is {req.grade} "
+            f"({GRADE_LABEL.get(req.grade, 'unknown')}).",
+            f"Model confidence is {req.confidence:.1f} percent"
+            f"{_confidence_hint(req.confidence)}.",
+        ]
+        if req.modality == "mri" and req.positive_labels:
+            parts.append(_positive_findings_sentence(req))
 
     ctx = req.patient_context
     if ctx is not None:
@@ -151,6 +203,37 @@ def render_findings_premise(req: FeedbackGenerateRequest) -> str:
             parts.append(f"Symptoms: {ctx.symptoms}")
 
     return " ".join(parts)
+
+
+def _positive_findings_sentence(req: FeedbackGenerateRequest) -> str:
+    named = ", ".join(
+        f"{label.name} at {label.probability:.1f} percent probability"
+        for label in sorted_labels(req)
+    )
+    return f"The following findings are positive: {named}."
+
+
+def _combined_premise_parts(req: FeedbackGenerateRequest) -> list[str]:
+    xray, mri, fusion = req.study("xray"), req.study("mri"), req.fusion
+    assert xray is not None and mri is not None and fusion is not None
+    parts = [
+        "This is a combined X-ray and MRI assessment of the knee.",
+        f"On X-ray, the Kellgren-Lawrence grade is {xray.grade} "
+        f"({GRADE_LABEL.get(xray.grade, 'unknown')}), with model confidence "
+        f"{xray.confidence:.1f} percent{_confidence_hint(xray.confidence)}.",
+        f"On MRI, the grade is {mri.grade} "
+        f"({GRADE_LABEL.get(mri.grade, 'unknown')}), with model confidence "
+        f"{mri.confidence:.1f} percent{_confidence_hint(mri.confidence)}.",
+    ]
+    if req.positive_labels:
+        parts.append(_positive_findings_sentence(req))
+    parts.append(
+        f"The combined grade, weighted by model confidence, is {fusion.grade} "
+        f"({GRADE_LABEL.get(fusion.grade, 'unknown')})."
+    )
+    parts.append(_agreement_sentence(fusion.grade_gap))
+    parts.append(MRI_GRADE_CAVEAT)
+    return parts
 
 
 def _patient_block(req: FeedbackGenerateRequest) -> list[str]:

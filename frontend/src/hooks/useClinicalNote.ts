@@ -25,6 +25,21 @@ function labelsKey(req: ClinicalNoteRequest | null): string {
     .join("|");
 }
 
+/** Stable key fragment for a combined note's studies. */
+function studiesKey(req: ClinicalNoteRequest | null): string {
+  if (!req?.studies?.length) return "";
+  return [...req.studies]
+    .map(s => {
+      const labels = (s.positive_labels ?? [])
+        .map(label => `${label.name}@${label.probability.toFixed(1)}`)
+        .sort()
+        .join(",");
+      return `${s.modality}:${s.grade}:${s.confidence.toFixed(1)}:${labels}`;
+    })
+    .sort()
+    .join("|");
+}
+
 /**
  * Cache key for one patient's note.
  *
@@ -45,6 +60,7 @@ export function clinicalNoteQueryKey(
     req?.confidence ?? null,
     req?.config ?? "rag_gate",
     labelsKey(req),
+    studiesKey(req),
   ] as const;
 }
 

@@ -1,11 +1,9 @@
 import { useId, useState } from "react";
 import {
   AlertTriangle,
-  BookOpen,
   Check,
   ChevronDown,
   ExternalLink,
-  FileText,
   Loader2,
   Pencil,
   RefreshCw,
@@ -23,13 +21,12 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { groundingBand } from "@/lib/clinicalNote";
-import { GENERAL_MEDICAL_REFERENCES } from "@/lib/medicalReferences";
 import { cn } from "@/lib/utils";
 import type {
   ClinicalNoteFallbackReason,
   ClinicalNoteResponse,
   NoteSentence,
-  PassageSchema,
+  RetrievedPassage,
 } from "@/lib/diagnosticApi";
 import type { NoteReviewStatus } from "@/data/patients";
 
@@ -39,12 +36,17 @@ import type { NoteReviewStatus } from "@/data/patients";
  *
  * Two rules this component exists to enforce:
  *
- * 1. It never renders deterministic `FeedbackBundle` text. When no note was
- *    served it says so and says why. Filling the gap with dictionary text would
- *    misreport provenance, and it is the one thing the whole grounding pipeline
- *    is measured against.
+ * 1. It never renders text the model did not write. When no note was served it
+ *    says so and says why — no deterministic `FeedbackBundle` text, no static
+ *    reference list. Filling the gap would misreport provenance, and an honest
+ *    gap is the one thing the whole grounding pipeline is measured against.
  * 2. Nothing here enters the patient record until a clinician accepts or edits
  *    it, which is what the sign-off row below is for.
+ *
+ * Citations shown beside the note are the passages the entailment model found
+ * supporting each sentence. The model's own `[n]` markers are never surfaced:
+ * they can point at the wrong passage or at none, and measuring how often they
+ * do is what `citation_agreement_rate` is for.
  */
 
 /**
@@ -268,7 +270,8 @@ function SentenceVerdicts({
               {SENTENCE_LABEL_COPY[sentence.label]}
             </span>
             <span className="text-muted-foreground">
-              {number === null ? "(no source)" : `[${number}]`} {sentence.text}
+              {number === null ? "(no source)" : `[${number}]`}{" "}
+              {stripCitationMarkers(sentence.text)}
             </span>
           </div>
         );
@@ -277,94 +280,116 @@ function SentenceVerdicts({
   );
 }
 
-/**
- * Renders clinical synthesis or step text, parsing numeric citation markers
- * like `[1]`, `[2]` into clickable badges that link directly to the real PubMed Central paper.
- */
-function FormattedClinicalText({
-  text,
-  passages,
-  onCitationClick,
-}: {
-  text: string;
-  passages?: PassageSchema[];
-  onCitationClick?: (index: number) => void;
-}) {
-  const cleaned = cleanNoteText(text);
-  if (!cleaned) return null;
+/** Removes the model's own `[n]` markers, which are never shown. */
+function stripCitationMarkers(text: string): string {
+  return text
+    .replace(/\s*\[\d+\]/g, "")
+    .replace(/\s{2,}/g, " ")
+    .trim();
+}
 
-  const parts = cleaned.split(/(\[\d+\])/g);
-  const maxValidPassage = passages?.length || 6;
+/**
+ * The source badge for one sentence: the passage the entailment model found
+ * supporting it. Sentences the model did not judge supported get no badge, so
+ * an unsupported claim reads as uncited rather than as backed by the nearest
+ * passage.
+ */
+function EvidenceCitation({
+  sentence,
+  passages,
+  onOpenEvidence,
+}: {
+  sentence: NoteSentence | undefined;
+  passages: RetrievedPassage[];
+  onOpenEvidence: () => void;
+}) {
+  if (sentence?.label !== "entailment" || !sentence.supporting_passage_id) {
+    return null;
+  }
+  const index = passages.findIndex(
+    passage => passage.passage_id === sentence.supporting_passage_id,
+  );
+  if (index === -1) return null;
+
+  const passage = passages[index];
+  const number = index + 1;
+  const badgeClass =
+    "inline-flex items-center text-[10px] font-semibold text-primary bg-primary/10 hover:bg-primary/25 hover:text-primary px-1 py-0.5 rounded mx-0.5 transition-colors cursor-pointer";
 
   return (
-    <span>
-      {parts.map((part, i) => {
-        const match = part.match(/^\[(\d+)\]$/);
-        if (!match) {
-          return <span key={i}>{part}</span>;
-        }
-
-        const citationNum = parseInt(match[1], 10);
-        // Ignore citations that exceed valid passage range (hallucinations like [191])
-        if (citationNum > maxValidPassage || citationNum < 1) {
-          return null;
-        }
-
-        const passage = passages?.[citationNum - 1];
-        if (!passage) {
-          return (
-            <span
-              key={i}
-              className="inline-flex items-center text-[10px] font-semibold text-primary/80 bg-primary/5 px-1 py-0.5 rounded mx-0.5"
+    <TooltipProvider delayDuration={150}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          {passage.url ? (
+            <a
+              href={passage.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={e => e.stopPropagation()}
+              className={badgeClass}
+              aria-label={`Supporting evidence [${number}]: ${passage.source}`}
             >
-              [{citationNum}]
+              [{number}]
+            </a>
+          ) : (
+            <button
+              type="button"
+              onClick={onOpenEvidence}
+              className={badgeClass}
+              aria-label={`Supporting evidence [${number}]: ${passage.source}`}
+            >
+              [{number}]
+            </button>
+          )}
+        </TooltipTrigger>
+        <TooltipContent side="top" className="max-w-xs p-2 text-xs">
+          <p className="font-medium text-foreground">
+            [{number}] {passage.source}
+          </p>
+          <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">
+            {passage.text}
+          </p>
+          {passage.url && (
+            <span className="inline-flex items-center gap-1 text-[10px] text-primary mt-1.5 font-medium">
+              Read original source on PMC <ExternalLink className="w-2.5 h-2.5" />
             </span>
-          );
-        }
+          )}
+        </TooltipContent>
+      </Tooltip>
+    </TooltipProvider>
+  );
+}
 
-        return (
-          <TooltipProvider key={i} delayDuration={150}>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                {passage.url ? (
-                  <a
-                    href={passage.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={e => e.stopPropagation()}
-                    className="inline-flex items-center text-[10px] font-semibold text-primary bg-primary/10 hover:bg-primary/25 hover:text-primary px-1 py-0.5 rounded mx-0.5 transition-colors cursor-pointer"
-                    title={`[${citationNum}] ${passage.source}`}
-                  >
-                    [{citationNum}]
-                  </a>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => onCitationClick?.(citationNum - 1)}
-                    className="inline-flex items-center text-[10px] font-semibold text-primary bg-primary/10 hover:bg-primary/25 hover:text-primary px-1 py-0.5 rounded mx-0.5 transition-colors cursor-pointer"
-                    title={`[${citationNum}] ${passage.source}`}
-                  >
-                    [{citationNum}]
-                  </button>
-                )}
-              </TooltipTrigger>
-              <TooltipContent side="top" className="max-w-xs p-2 text-xs">
-                <p className="font-medium text-foreground">
-                  [{citationNum}] {passage.source}
-                </p>
-                <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">
-                  {passage.text}
-                </p>
-                {passage.url && (
-                  <span className="inline-flex items-center gap-1 text-[10px] text-primary mt-1.5 font-medium">
-                    Read original source on PMC <ExternalLink className="w-2.5 h-2.5" />
-                  </span>
-                )}
-              </TooltipContent>
-            </Tooltip>
-          </TooltipProvider>
-        );
-      })}
+/**
+ * The synthesis, rendered sentence by sentence as the gate scored it, each with
+ * its entailment-derived source. Falls back to the plain text, markers removed,
+ * when no per-sentence verdicts came back.
+ */
+function SynthesisText({
+  text,
+  sentences,
+  passages,
+  onOpenEvidence,
+}: {
+  text: string;
+  sentences: NoteSentence[];
+  passages: RetrievedPassage[];
+  onOpenEvidence: () => void;
+}) {
+  if (!sentences.length) return <span>{stripCitationMarkers(text)}</span>;
+  return (
+    <span>
+      {sentences.map((sentence, idx) => (
+        <span key={idx}>
+          {idx > 0 && " "}
+          {stripCitationMarkers(sentence.text)}
+          <EvidenceCitation
+            sentence={sentence}
+            passages={passages}
+            onOpenEvidence={onOpenEvidence}
+          />
+        </span>
+      ))}
     </span>
   );
 }
@@ -476,14 +501,41 @@ export function ClinicalNotePanel({
       )}
 
       {state.kind === "error" && (
-        <div className="space-y-3">
-          <div className="flex items-start justify-between gap-2 p-2 rounded-lg border bg-destructive/5 border-destructive/20">
-            <div className="flex items-start gap-2">
-              <AlertTriangle className="w-3.5 h-3.5 text-destructive flex-shrink-0 mt-0.5" />
-              <div className="text-[11px] leading-relaxed text-destructive">
-                <p className="font-medium">{state.error.message || "Could not reach the clinical note service."}</p>
-                <p className="mt-0.5 opacity-80">Showing verified literature reference base below for clinical evaluation.</p>
-              </div>
+        <div className="flex items-start justify-between gap-2 p-2 rounded-lg border bg-destructive/5 border-destructive/20">
+          <div className="flex items-start gap-2">
+            <AlertTriangle className="w-3.5 h-3.5 text-destructive flex-shrink-0 mt-0.5" />
+            <p className="text-[11px] leading-relaxed text-destructive font-medium">
+              {state.error.message || "Could not reach the clinical note service."}
+            </p>
+          </div>
+          <Button
+            type="button"
+            size="sm"
+            variant="outline"
+            onClick={onRegenerate}
+            className="text-xs h-7 flex-shrink-0"
+          >
+            <RefreshCw className="w-3 h-3 mr-1.5" aria-hidden="true" /> Try again
+          </Button>
+        </div>
+      )}
+
+      {/* Withheld: say so plainly, and say why. Never substitute other text. */}
+      {state.kind === "ready" && !note && (
+        <NoteAlert tone="warning" testId="clinical-note-unavailable">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <p>
+                {response?.fallback_reason
+                  ? FALLBACK_COPY[response.fallback_reason]
+                  : "AI note unavailable."}
+              </p>
+              {response?.fallback_reason === "gate_rejected" && (
+                <p className="mt-1 opacity-80">
+                  {plural(response.gate_attempts, "attempt")} below the groundedness
+                  threshold. The deterministic interpretation above is unaffected.
+                </p>
+              )}
             </div>
             <Button
               type="button"
@@ -492,164 +544,26 @@ export function ClinicalNotePanel({
               onClick={onRegenerate}
               className="text-xs h-7 flex-shrink-0"
             >
-              <RefreshCw className="w-3 h-3 mr-1.5" aria-hidden="true" /> Try again
+              <RefreshCw className="w-3 h-3 mr-1.5" aria-hidden="true" /> Regenerate draft
             </Button>
           </div>
-
-          {/* Fallback Reference Literature Base */}
-          <div className="p-3 rounded-lg border bg-muted/20 space-y-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5">
-                <BookOpen className="w-3.5 h-3.5 text-primary" />
-                <p className="text-xs font-medium">Standard Medical References &amp; Diagnostic Criteria</p>
-              </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                Verified Literature
-              </span>
-            </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Standard peer-reviewed literature and radiological grading criteria used by the KneeXpert classification engine:
-            </p>
-            <ol className="space-y-2 pt-0.5">
-              {GENERAL_MEDICAL_REFERENCES.map((ref, idx) => (
-                <li
-                  key={idx}
-                  className="text-xs p-2.5 rounded-lg bg-card border flex items-start justify-between gap-3 hover:bg-accent/40 transition-colors"
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="font-semibold text-primary text-xs mt-0.5">{idx + 1}.</span>
-                    <div>
-                      <p className="text-foreground/90 font-medium text-xs leading-snug">{ref.citation}</p>
-                      {ref.note && <p className="text-[11px] text-muted-foreground mt-0.5">{ref.note}</p>}
-                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                        {ref.badge && (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-primary/10 text-primary font-medium">
-                            {ref.badge}
-                          </span>
-                        )}
-                        {ref.pmcid && (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-muted text-muted-foreground border">
-                            {ref.pmcid}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <a
-                    href={ref.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline flex-shrink-0 px-2.5 py-1 rounded-md bg-background border shadow-xs hover:bg-accent transition-colors"
-                    title="Read original peer-reviewed publication in new tab"
-                  >
-                    <span>Read Source</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </div>
-      )}
-
-      {/* Withheld: say so plainly, and say why. Never substitute other text. */}
-      {state.kind === "ready" && !note && (
-        <div className="space-y-3">
-          <NoteAlert tone="warning" testId="clinical-note-unavailable">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p>
-                  {response?.fallback_reason
-                    ? FALLBACK_COPY[response.fallback_reason]
-                    : "AI note unavailable."}
-                </p>
-                {response?.fallback_reason === "gate_rejected" && (
-                  <p className="mt-1 opacity-80">
-                    {plural(response.gate_attempts, "attempt")} below the groundedness
-                    threshold. Showing general verified reference literature below for clinical evaluation.
-                  </p>
-                )}
-                {response?.fallback_reason === "llm_unavailable" && (
-                  <p className="mt-1 opacity-80">
-                    Language model service is unreachable. Showing general verified reference literature below for clinical evaluation.
-                  </p>
-                )}
-              </div>
-              <Button
-                type="button"
-                size="sm"
-                variant="outline"
-                onClick={onRegenerate}
-                className="text-xs h-7 flex-shrink-0"
-              >
-                <RefreshCw className="w-3 h-3 mr-1.5" aria-hidden="true" /> Regenerate draft
-              </Button>
-            </div>
-          </NoteAlert>
-
-          {/* Fallback Reference Literature Base */}
-          <div className="p-3 rounded-lg border bg-muted/20 space-y-2.5">
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-1.5">
-                <BookOpen className="w-3.5 h-3.5 text-primary" />
-                <p className="text-xs font-medium">Standard Medical References &amp; Diagnostic Criteria</p>
-              </div>
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary font-medium">
-                Verified Literature
-              </span>
-            </div>
-            <p className="text-[11px] text-muted-foreground leading-relaxed">
-              Standard peer-reviewed literature and radiological grading criteria used by the KneeXpert classification engine:
-            </p>
-            <ol className="space-y-2 pt-0.5">
-              {GENERAL_MEDICAL_REFERENCES.map((ref, idx) => (
-                <li
-                  key={idx}
-                  className="text-xs p-2.5 rounded-lg bg-card border flex items-start justify-between gap-3 hover:bg-accent/40 transition-colors"
-                >
-                  <div className="flex items-start gap-2">
-                    <span className="font-semibold text-primary text-xs mt-0.5">{idx + 1}.</span>
-                    <div>
-                      <p className="text-foreground/90 font-medium text-xs leading-snug">{ref.citation}</p>
-                      {ref.note && <p className="text-[11px] text-muted-foreground mt-0.5">{ref.note}</p>}
-                      <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                        {ref.badge && (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-primary/10 text-primary font-medium">
-                            {ref.badge}
-                          </span>
-                        )}
-                        {ref.pmcid && (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-muted text-muted-foreground border">
-                            {ref.pmcid}
-                          </span>
-                        )}
-                        {ref.pmid && (
-                          <span className="text-[10px] px-1.5 py-0.2 rounded bg-muted text-muted-foreground border">
-                            PMID: {ref.pmid}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                  <a
-                    href={ref.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline flex-shrink-0 px-2.5 py-1 rounded-md bg-background border shadow-xs hover:bg-accent transition-colors"
-                    title="Read original peer-reviewed publication in new tab"
-                  >
-                    <span>Read Source</span>
-                    <ExternalLink className="w-3 h-3" />
-                  </a>
-                </li>
-              ))}
-            </ol>
-          </div>
-        </div>
+        </NoteAlert>
       )}
 
       {state.kind === "ready" && note && (() => {
         const { cleanSynthesis, steps } = extractNextStepsIfMissing(note.synthesis, note.next_steps);
+        const passages = response?.retrieved_passages ?? [];
+        const openEvidence = () => setShowEvidence(true);
+        // The backend scores synthesis sentences first, then one entry per next
+        // step, so the verdicts split at a fixed point.
+        const stepCount = note.next_steps.length;
+        const aligned = note.sentences.length >= stepCount;
+        const synthesisSentences = aligned
+          ? note.sentences.slice(0, note.sentences.length - stepCount)
+          : [];
+        const stepSentences = aligned
+          ? note.sentences.slice(note.sentences.length - stepCount)
+          : [];
         return (
           <div className="space-y-3" data-testid="clinical-note-body">
             <NoteAlert tone="warning">
@@ -663,10 +577,11 @@ export function ClinicalNotePanel({
                   {reviewedText?.trim() ? (
                     reviewedText
                   ) : (
-                    <FormattedClinicalText
+                    <SynthesisText
                       text={cleanSynthesis}
-                      passages={response?.retrieved_passages}
-                      onCitationClick={() => setShowEvidence(true)}
+                      sentences={synthesisSentences}
+                      passages={passages}
+                      onOpenEvidence={openEvidence}
                     />
                   )}
                 </p>
@@ -689,10 +604,11 @@ export function ClinicalNotePanel({
                   Show the model's original wording
                 </summary>
                 <p className="mt-1 p-2 rounded-lg bg-muted/40 border text-muted-foreground leading-relaxed">
-                  <FormattedClinicalText
+                  <SynthesisText
                     text={cleanSynthesis}
-                    passages={response?.retrieved_passages}
-                    onCitationClick={() => setShowEvidence(true)}
+                    sentences={synthesisSentences}
+                    passages={passages}
+                    onOpenEvidence={openEvidence}
                   />
                 </p>
               </details>
@@ -714,10 +630,11 @@ export function ClinicalNotePanel({
                         {idx + 1}.
                       </span>
                       <span>
-                        <FormattedClinicalText
-                          text={step}
-                          passages={response?.retrieved_passages}
-                          onCitationClick={() => setShowEvidence(true)}
+                        {stripCitationMarkers(step)}
+                        <EvidenceCitation
+                          sentence={stepSentences[idx]}
+                          passages={passages}
+                          onOpenEvidence={openEvidence}
                         />
                       </span>
                     </li>

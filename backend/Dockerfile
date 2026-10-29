@@ -12,9 +12,10 @@ WORKDIR /app
 # Install CPU-only torch/torchvision from the PyTorch CPU index BEFORE the rest,
 # so pip doesn't pull the ~3GB CUDA GPU stack (cuDNN, cuSPARSELt, etc.) that a
 # CPU container can't use. The pinned versions then satisfy the requirements.txt ranges.
-COPY requirements.txt .
+COPY requirements.txt requirements-trulens.txt ./
 RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu \
-    && pip install --no-cache-dir -r requirements.txt
+    && pip install --no-cache-dir -r requirements.txt \
+    && pip install --no-cache-dir -r requirements-trulens.txt
 
 # App code (model weights & data are mounted at runtime, see docker-compose.yml)
 COPY . .

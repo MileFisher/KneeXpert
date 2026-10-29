@@ -30,6 +30,7 @@ from rag.config import (
     rag_corpus_chunk_count,
     rag_index_ready,
 )
+from rag.trulens_layer import trulens_status
 
 _probe_cache: dict[str, Any] = {"at": 0.0, "value": None}
 
@@ -123,4 +124,5 @@ async def rag_health() -> dict[str, Any]:
         "llm_model_present": llm["model_present"],
         "llm_base_url": OLLAMA_BASE_URL,
         "llm_error": llm["error"],
+        **trulens_status(),
     }

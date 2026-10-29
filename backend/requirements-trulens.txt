@@ -1,0 +1,16 @@
+# Optional: TruLens decides the clinical-note gate and records every note.
+# Enable with RAG_TRULENS=1. See rag/trulens_layer.py.
+#
+# Install into the backend's own virtualenv, never a shared interpreter:
+# trulens-core pins rich<14 and will downgrade it for every other tool there.
+#
+# Versions pinned exactly; both released 2026-10-05.
+trulens-core==2.15.0
+trulens-feedback==2.15.0
+#
+# To browse records, also install the dashboard (pulls in Streamlit + Jupyter),
+# then point it at the trace log, from backend/:
+#   pip install trulens-dashboard==2.15.0
+#   trulens-dashboard --dir rag/trulens --port 8501
+# On Windows, Streamlit's deeply nested files need a short venv path (e.g.
+# backend/.venv) or long-path support enabled, or the install fails.

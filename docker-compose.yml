@@ -12,6 +12,8 @@ services:
       # Vector index persists across container restarts so the corpus is not
       # re-embedded on every `docker compose up`.
       - ./backend/rag/index:/app/rag/index
+      # TruLens trace log, so recorded notes survive a container rebuild.
+      - ./backend/rag/trulens:/app/rag/trulens
     environment:
       # Generation runs outside this container. host.docker.internal reaches an
       # Ollama running on the host; point it at a GPU box's URL to use one instead.
@@ -25,6 +27,9 @@ services:
       # Passed through only when set in the shell; otherwise the backend falls
       # back to RAG_TAU, so the two thresholds start out equal.
       - RAG_TAU_NEXT_STEPS
+      # TruLens guardrail + trace log. Installed in the image, and on by default
+      # here because the container's interpreter is not shared with anything else.
+      - RAG_TRULENS=${RAG_TRULENS:-1}
     extra_hosts:
       # Makes host.docker.internal resolve on Linux hosts, where it is not
       # provided automatically as it is on Docker Desktop.

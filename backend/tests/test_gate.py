@@ -265,3 +265,47 @@ def test_first_attempt_carries_no_revision_hint() -> None:
 def test_attempt_beyond_the_schedule_does_not_crash() -> None:
     plan = plan_attempt(9, max_retries=2)
     assert plan.temperature == 0.0
+
+
+# ── Margin: the two-part verdict as one guardrail score ───────────────────────
+
+
+def test_margin_agrees_with_passes_everywhere() -> None:
+    """TruLens's guardrail blocks below 1.0, so this equivalence *is* the gate."""
+    from rag.gate import margin, passes
+
+    values = [None, 0.0, 0.1, 0.39, 0.4, 0.41, 0.59, 0.6, 0.6000001, 0.61, 0.95, 1.0]
+    thresholds = [0.0, 0.3, 0.4, 0.6, 0.95]
+    for synthesis in values:
+        for steps in values:
+            for tau_s in thresholds:
+                for tau_n in thresholds:
+                    verdict = passes(synthesis, steps, tau_s, tau_n)
+                    assert (margin(synthesis, steps, tau_s, tau_n) >= 1.0) == verdict, (
+                        synthesis, steps, tau_s, tau_n,
+                    )
+
+
+def test_margin_is_the_weaker_part_relative_to_its_bar() -> None:
+    from rag.gate import margin
+
+    assert margin(0.9, 0.3, 0.6, 0.6) == pytest.approx(0.5)
+    assert margin(0.9, None, 0.6, 0.6) == pytest.approx(1.5)
+
+
+def test_margin_is_finite_with_a_zero_threshold() -> None:
+    import math
+
+    from rag.gate import MARGIN_CAP, margin
+
+    value = margin(0.9, 0.0, 0.6, 0.0)
+    assert math.isfinite(value) and value <= MARGIN_CAP
+
+
+def test_outcome_margin_matches_its_verdict() -> None:
+    outcome = evaluate(
+        [score(0.9, cls="synthesis"), score(0.45, cls="next_step")],
+        threshold=0.6,
+        next_steps_threshold=0.4,
+    )
+    assert outcome.passed and outcome.margin >= 1.0

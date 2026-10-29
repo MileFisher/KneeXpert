@@ -110,6 +110,20 @@ SYNTHESIS_TAU = float(os.getenv("RAG_TAU", "0.60"))
 NEXT_STEPS_TAU = float(os.getenv("RAG_TAU_NEXT_STEPS", str(SYNTHESIS_TAU)))
 MAX_RETRIES = 2  # 3 attempts total
 
+# ── TruLens (optional) ────────────────────────────────────────────────────────
+
+# When on, the gate's pass/fail is decided by a TruLens guardrail and every note
+# is recorded for the TruLens dashboard. Off by default, and optional to install:
+# trulens-core pins rich<14, so it belongs in the backend's own virtualenv or the
+# Docker image, never a shared interpreter. Off or absent, the gate is unchanged.
+TRULENS_ENABLED = os.getenv("RAG_TRULENS", "0").strip().lower() in ("1", "true", "yes")
+# Gitignored. TruLens's own trace log — not an application database.
+TRULENS_DIR = RAG_ROOT / "trulens"
+TRULENS_DB_URL = os.getenv(
+    "RAG_TRULENS_DB_URL", f"sqlite:///{(TRULENS_DIR / 'trulens.sqlite').as_posix()}"
+)
+TRULENS_APP_NAME = "kneexpert-clinical-notes"
+
 # Attempt -> temperature. Attempt 3 also re-retrieves at TOP_K_RETRY.
 RETRY_TEMPERATURES = (0.2, 0.1, 0.0)
 

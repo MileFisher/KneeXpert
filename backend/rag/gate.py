@@ -16,6 +16,7 @@ wrong diagnosis, which a single pooled mean allowed.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass, field
 from typing import Iterable, Literal
 
@@ -52,6 +53,40 @@ def passes(
     if synthesis is None or synthesis < synthesis_threshold:
         return False
     return next_steps is None or next_steps >= next_steps_threshold
+
+
+MARGIN_CAP = 10.0
+"""Ceiling on :func:`margin`. A zero threshold would otherwise make it infinite,
+which a trace attribute cannot carry."""
+
+
+def margin(
+    synthesis: float | None,
+    next_steps: float | None,
+    synthesis_threshold: float,
+    next_steps_threshold: float,
+) -> float:
+    """The verdict of :func:`passes` as one number: at least 1.0 exactly when it passes.
+
+    The weaker part's score as a fraction of its own threshold. This is what lets
+    a single-score guardrail — TruLens's ``block_output``, thresholded at 1.0 —
+    apply a two-threshold rule without a second copy of it.
+
+    Division can land a ratio on 1.0 from just below, so the result is pinned to
+    the side :func:`passes` chose; the two can never disagree.
+    """
+    if synthesis is None:
+        return 0.0
+
+    def ratio(score: float, threshold: float) -> float:
+        return MARGIN_CAP if threshold <= 0 else min(score / threshold, MARGIN_CAP)
+
+    value = ratio(synthesis, synthesis_threshold)
+    if next_steps is not None:
+        value = min(value, ratio(next_steps, next_steps_threshold))
+    if passes(synthesis, next_steps, synthesis_threshold, next_steps_threshold):
+        return max(value, 1.0)
+    return min(value, math.nextafter(1.0, 0.0))
 
 
 def rejected_texts(
@@ -118,6 +153,16 @@ class GateOutcome:
         if self.next_steps_threshold is None:
             return self.threshold
         return self.next_steps_threshold
+
+    @property
+    def margin(self) -> float:
+        """See :func:`margin`. At least 1.0 exactly when ``passed``."""
+        return margin(
+            self.synthesis_groundedness,
+            self.next_steps_groundedness,
+            self.threshold,
+            self.effective_next_steps_threshold,
+        )
 
     @property
     def rejected_sentences(self) -> list[str]:

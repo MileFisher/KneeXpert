@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { generateClinicalNote } from "./diagnosticApi";
+import { fuseStudies, generateClinicalNote } from "./diagnosticApi";
 import type { ClinicalNoteResponse } from "./diagnosticApi";
 
 function jsonResponse(body: unknown, init: { ok?: boolean; status?: number } = {}) {
@@ -147,5 +147,33 @@ describe("generateClinicalNote", () => {
       controller.signal,
     );
     expect(fetchMock.mock.calls[0][1].signal).toBe(controller.signal);
+  });
+});
+
+describe("fuseStudies", () => {
+  const studies = [
+    { modality: "xray" as const, grade: 2, confidence: 90 },
+    { modality: "mri" as const, grade: 4, confidence: 60 },
+  ];
+
+  it("posts the studies to the orchestrator", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(jsonResponse({ grade: 3 }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await fuseStudies(studies);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(String(url)).toMatch(/\/api\/fusion$/);
+    expect(JSON.parse(init.body)).toEqual({ studies });
+  });
+
+  it("surfaces the backend's error detail", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        jsonResponse({ detail: "Fusion error: boom" }, { ok: false, status: 500 }),
+      ),
+    );
+    await expect(fuseStudies(studies)).rejects.toThrow("Fusion error: boom");
   });
 });

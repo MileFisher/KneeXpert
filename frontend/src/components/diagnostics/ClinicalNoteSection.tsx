@@ -5,8 +5,13 @@ import { ClinicalNotePanel } from "./ClinicalNotePanel";
 import type { ClinicalNoteViewState } from "./ClinicalNotePanel";
 import { useClinicalNote } from "@/hooks/useClinicalNote";
 import { usePatients } from "@/context/PatientContext";
-import type { Modality, Patient, SignedClinicalNote } from "@/data/patients";
-import type { ClinicalNoteRequest, MriPredictResponse } from "@/lib/diagnosticApi";
+import type { Patient, SignedClinicalNote } from "@/data/patients";
+import type {
+  ClinicalNoteRequest,
+  MriPredictResponse,
+  NoteModality,
+  StudyResult,
+} from "@/lib/diagnosticApi";
 
 /**
  * Wiring for the clinical-note panel: builds the request, runs the query, and
@@ -18,11 +23,18 @@ import type { ClinicalNoteRequest, MriPredictResponse } from "@/lib/diagnosticAp
 
 type Props = {
   patient: Patient;
-  modality: Modality;
+  modality: NoteModality;
   grade: number;
   confidence: number;
   /** Raw MRI response, when the active modality is MRI, for its label set. */
   mriData?: MriPredictResponse | null;
+  /**
+   * Combined notes only: the X-ray and MRI studies. The backend derives the
+   * grade, confidence and labels from these.
+   */
+  studies?: StudyResult[];
+  /** Panel heading. */
+  title?: string;
   /** Name recorded against the sign-off. */
   clinicianName?: string;
 };
@@ -33,6 +45,8 @@ export function ClinicalNoteSection({
   grade,
   confidence,
   mriData,
+  studies,
+  title,
   clinicianName = "Reviewing clinician",
 }: Props) {
   const { signOffClinicalNote } = usePatients();
@@ -49,6 +63,7 @@ export function ClinicalNoteSection({
       grade,
       confidence,
       positive_labels: positive,
+      ...(modality === "combined" ? { studies } : {}),
       // Patient context lives in browser storage, so the backend has no access
       // to it and it must travel in the request body.
       patient_context: {
@@ -65,6 +80,7 @@ export function ClinicalNoteSection({
     grade,
     confidence,
     mriData,
+    studies,
     patient.age,
     patient.gender,
     patient.bmi,
@@ -128,6 +144,7 @@ export function ClinicalNoteSection({
 
   return (
     <ClinicalNotePanel
+      title={title}
       state={viewState}
       status={existing?.status ?? null}
       reviewedText={existing?.reviewedText}

@@ -9,10 +9,17 @@ import {
   type ReportModelSnapshot,
   type SignedClinicalNote,
 } from "@/data/patients";
+import type { FusionResult } from "@/lib/diagnosticApi";
 import { loadPatients, savePatients } from "@/lib/patientStorage";
 
 export type ConfirmDiagnosisPayload = {
+  /** The final grade: the AI's when confirmed, the doctor's when overridden. */
   grade: number;
+  /**
+   * What the AI said, kept separately so an override does not erase it. Without
+   * it, AI-versus-doctor agreement cannot be measured from the record.
+   */
+  aiGrade: number;
   aiConfidence: number;
   findings: string[];
   diagnosisSummary: string;
@@ -25,13 +32,15 @@ export type ConfirmDiagnosisPayload = {
   ensembleGradcamDataUrl?: string | null;
   modelResults?: ReportModelSnapshot[];
   modalitySnapshots?: ModalityReportSnapshot[];
+  /** The orchestrator's result, when an X-ray and an MRI were combined. */
+  fusion?: FusionResult;
   doctorOverride?: boolean;
   overrideNotes?: string;
 };
 
 export type ApplyAnalysisPayload = Omit<
   ConfirmDiagnosisPayload,
-  "doctorOverride" | "overrideNotes"
+  "doctorOverride" | "overrideNotes" | "aiGrade"
 > & {
   modalitySnapshots?: ModalityReportSnapshot[];
 };
@@ -167,6 +176,7 @@ export function PatientProvider({ children }: { children: ReactNode }) {
           ensembleGradcamDataUrl: payload.ensembleGradcamDataUrl,
           modelResults: payload.modelResults,
           modalitySnapshots: payload.modalitySnapshots,
+          fusion: payload.fusion,
           doctorConfirmed: false,
           doctorOverride: false,
           updatedAt: today,
@@ -199,10 +209,10 @@ export function PatientProvider({ children }: { children: ReactNode }) {
     setPatients(prev =>
       prev.map(p => {
         if (p.id !== patientId) return p;
-        const finalGrade = payload.doctorOverride ? payload.grade : payload.grade;
+        const finalGrade = payload.grade;
         const nextVersion = (p.report?.version ?? 0) + 1;
         const report: PatientReport = {
-          aiGrade: payload.grade,
+          aiGrade: payload.aiGrade,
           aiConfidence: payload.aiConfidence,
           finalGrade,
           modality: payload.modality,
@@ -216,6 +226,9 @@ export function PatientProvider({ children }: { children: ReactNode }) {
           ensembleGradcamDataUrl: payload.ensembleGradcamDataUrl ?? p.report?.ensembleGradcamDataUrl,
           modelResults: payload.modelResults ?? p.report?.modelResults,
           modalitySnapshots: payload.modalitySnapshots ?? p.report?.modalitySnapshots,
+          fusion: payload.fusion ?? p.report?.fusion,
+          // Confirming the grade must not discard notes already signed off.
+          clinicalNotes: p.report?.clinicalNotes,
           doctorConfirmed: true,
           doctorOverride: payload.doctorOverride ?? false,
           overrideNotes: payload.overrideNotes,

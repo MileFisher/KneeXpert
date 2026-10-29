@@ -54,6 +54,7 @@ from rag.schemas import (
     TriadScores,
 )
 from rag.store import RetrievedPassage
+from rag.trulens_layer import NoteTracer, get_tracer
 
 
 class CorpusNotIndexed(RuntimeError):
@@ -217,10 +218,14 @@ def run_attempt(
     # §2.9's "patient record and retrieved guidelines". Gate-only: never reported
     # as retrieved, never counted in context relevance.
     premises = [findings_premise(req), *passages]
-    outcome = evaluate(
-        groundedness(sentences, premises),
-        threshold=SYNTHESIS_TAU,
-        next_steps_threshold=NEXT_STEPS_TAU,
+    # The scores come from the local NLI model either way; with TruLens on, the
+    # pass/fail on them is decided by its guardrail and recorded as a span.
+    outcome = get_tracer().judge(
+        evaluate(
+            groundedness(sentences, premises),
+            threshold=SYNTHESIS_TAU,
+            next_steps_threshold=NEXT_STEPS_TAU,
+        )
     )
     triad = _triad_for(req, note, passages, outcome, include_passages)
     gate_ms = int((time.monotonic() - t) * 1000)
@@ -249,16 +254,38 @@ def _retrieval_ks_for_attempt(attempt: int, include_passages: bool) -> int:
     return TOP_K_RETRY if attempt >= MAX_RETRIES else TOP_K
 
 
+def _note_text(response: FeedbackGenerateResponse) -> str:
+    """What a TruLens record shows as its output. Empty when the note was withheld."""
+    note = response.clinical_note
+    if note is None:
+        return ""
+    return " ".join([note.synthesis, *note.next_steps]).strip()
+
+
 def generate_clinical_note(
     req: FeedbackGenerateRequest,
 ) -> FeedbackGenerateResponse:
-    """Retrieve, generate, and (from Phase 2) gate one clinical note.
+    """Retrieve, generate and gate one clinical note.
+
+    With TruLens on, the whole request is one TruLens record; otherwise this is
+    a direct call.
 
     Raises:
         CorpusNotIndexed: the vector index is missing or empty.
     """
+    from rag.retriever import build_query
+
+    tracer = get_tracer()
+    return tracer.record(
+        build_query(req), lambda: _generate_clinical_note(req, tracer), _note_text
+    )
+
+
+def _generate_clinical_note(
+    req: FeedbackGenerateRequest, tracer: NoteTracer
+) -> FeedbackGenerateResponse:
     from rag import ollama_client
-    from rag.retriever import retrieve
+    from rag.retriever import build_query, retrieve
     from rag.store import get_store
 
     latency: dict[str, int] = {}
@@ -278,6 +305,8 @@ def generate_clinical_note(
     # pydantic schema have the same fields, which made them easy to mix up — and
     # duck typing hid it until a typechecker ran.
     passages = to_schema(retrieve(req, k=TOP_K))
+    query = build_query(req)
+    tracer.retrieved(query, [p.text for p in passages])
     mark("retrieval", t)
 
     def respond(**kwargs: Any) -> FeedbackGenerateResponse:
@@ -306,6 +335,7 @@ def generate_clinical_note(
     generation_ms = 0
     gate_ms = 0
     last_outcome: GateOutcome | None = None
+    last_triad: TriadScores | None = None
     revision: str | None = None
 
     for attempt in range(MAX_RETRIES + 1):
@@ -316,6 +346,7 @@ def generate_clinical_note(
         # the premise set is never a function of which config is running.
         if plan.retrieval_k != TOP_K:
             passages = to_schema(retrieve(req, k=plan.retrieval_k))
+            tracer.retrieved(query, [p.text for p in passages])
 
         result = run_attempt(
             req,
@@ -339,9 +370,11 @@ def generate_clinical_note(
         outcome = result.outcome
         assert outcome is not None  # a parsed note is always scored
         last_outcome = outcome
+        last_triad = result.triad
         latency["gate"] = gate_ms
 
         if outcome.passed or not gate_enabled:
+            tracer.scored(result.triad)
             return respond(
                 clinical_note=_with_sentence_scores(
                     result.note, outcome.sentence_scores
@@ -410,6 +443,7 @@ def generate_clinical_note(
         return respond(fallback_reason="parse_failed", gate_attempts=attempts)
 
     latency["gate"] = gate_ms
+    tracer.scored(last_triad)
     return respond(
         fallback_reason="gate_rejected",
         gate_attempts=attempts,

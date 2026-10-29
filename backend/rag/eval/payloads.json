@@ -1252,5 +1252,941 @@
       "history": "Competitive football. Acute twisting injury 3 weeks ago.",
       "symptoms": "Mechanical catching on pivot; no night pain."
     }
+  },
+  {
+    "case_id": "combined-x0-m0-agree-xray-sure-young-athlete",
+    "modality": "combined",
+    "grade": 0,
+    "confidence": 77.5,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 0,
+        "confidence": 94.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 0,
+        "confidence": 61.0,
+        "positive_labels": []
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x0-m0-agree-mri-sure-midlife-raised-bmi",
+    "modality": "combined",
+    "grade": 0,
+    "confidence": 77.5,
+    "positive_labels": [],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 0,
+        "confidence": 61.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 0,
+        "confidence": 94.0,
+        "positive_labels": []
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x0-m2-disagree-xray-sure-older-prior-surgery",
+    "modality": "combined",
+    "grade": 1,
+    "confidence": 77.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Horizontal)",
+        "probability": 77.0
+      },
+      {
+        "name": "Cartilage Lesion (2A)",
+        "probability": 69.0
+      }
+    ],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 0,
+        "confidence": 94.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 2,
+        "confidence": 61.0,
+        "positive_labels": [
+          {
+            "name": "Meniscal Tear (Horizontal)",
+            "probability": 77.0
+          },
+          {
+            "name": "Cartilage Lesion (2A)",
+            "probability": 69.0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x0-m2-disagree-mri-sure-elderly-comorbid",
+    "modality": "combined",
+    "grade": 1,
+    "confidence": 77.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Horizontal)",
+        "probability": 77.0
+      },
+      {
+        "name": "Cartilage Lesion (2A)",
+        "probability": 69.0
+      }
+    ],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 0,
+        "confidence": 61.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 2,
+        "confidence": 94.0,
+        "positive_labels": [
+          {
+            "name": "Meniscal Tear (Horizontal)",
+            "probability": 77.0
+          },
+          {
+            "name": "Cartilage Lesion (2A)",
+            "probability": 69.0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x1-m1-agree-xray-sure-older-prior-surgery",
+    "modality": "combined",
+    "grade": 1,
+    "confidence": 77.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Myxoid)",
+        "probability": 58.0
+      }
+    ],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 1,
+        "confidence": 94.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 1,
+        "confidence": 61.0,
+        "positive_labels": [
+          {
+            "name": "Meniscal Tear (Myxoid)",
+            "probability": 58.0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x1-m1-agree-mri-sure-elderly-comorbid",
+    "modality": "combined",
+    "grade": 1,
+    "confidence": 77.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Myxoid)",
+        "probability": 58.0
+      }
+    ],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 1,
+        "confidence": 61.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 1,
+        "confidence": 94.0,
+        "positive_labels": [
+          {
+            "name": "Meniscal Tear (Myxoid)",
+            "probability": 58.0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x1-m3-disagree-xray-sure-young-athlete",
+    "modality": "combined",
+    "grade": 2,
+    "confidence": 77.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Radial)",
+        "probability": 91.2
+      },
+      {
+        "name": "Effusion",
+        "probability": 84.7
+      },
+      {
+        "name": "Cartilage Lesion (2B)",
+        "probability": 66.1
+      }
+    ],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 1,
+        "confidence": 94.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 3,
+        "confidence": 61.0,
+        "positive_labels": [
+          {
+            "name": "Meniscal Tear (Radial)",
+            "probability": 91.2
+          },
+          {
+            "name": "Effusion",
+            "probability": 84.7
+          },
+          {
+            "name": "Cartilage Lesion (2B)",
+            "probability": 66.1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x1-m3-disagree-mri-sure-midlife-raised-bmi",
+    "modality": "combined",
+    "grade": 2,
+    "confidence": 77.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Radial)",
+        "probability": 91.2
+      },
+      {
+        "name": "Effusion",
+        "probability": 84.7
+      },
+      {
+        "name": "Cartilage Lesion (2B)",
+        "probability": 66.1
+      }
+    ],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 1,
+        "confidence": 61.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 3,
+        "confidence": 94.0,
+        "positive_labels": [
+          {
+            "name": "Meniscal Tear (Radial)",
+            "probability": 91.2
+          },
+          {
+            "name": "Effusion",
+            "probability": 84.7
+          },
+          {
+            "name": "Cartilage Lesion (2B)",
+            "probability": 66.1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x2-m2-agree-xray-sure-young-athlete",
+    "modality": "combined",
+    "grade": 2,
+    "confidence": 77.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Horizontal)",
+        "probability": 77.0
+      },
+      {
+        "name": "Cartilage Lesion (2A)",
+        "probability": 69.0
+      }
+    ],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 2,
+        "confidence": 94.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 2,
+        "confidence": 61.0,
+        "positive_labels": [
+          {
+            "name": "Meniscal Tear (Horizontal)",
+            "probability": 77.0
+          },
+          {
+            "name": "Cartilage Lesion (2A)",
+            "probability": 69.0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x2-m2-agree-mri-sure-midlife-raised-bmi",
+    "modality": "combined",
+    "grade": 2,
+    "confidence": 77.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Horizontal)",
+        "probability": 77.0
+      },
+      {
+        "name": "Cartilage Lesion (2A)",
+        "probability": 69.0
+      }
+    ],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 2,
+        "confidence": 61.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 2,
+        "confidence": 94.0,
+        "positive_labels": [
+          {
+            "name": "Meniscal Tear (Horizontal)",
+            "probability": 77.0
+          },
+          {
+            "name": "Cartilage Lesion (2A)",
+            "probability": 69.0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x2-m4-disagree-xray-sure-older-prior-surgery",
+    "modality": "combined",
+    "grade": 3,
+    "confidence": 77.5,
+    "positive_labels": [
+      {
+        "name": "Cartilage Lesion (3)",
+        "probability": 94.0
+      },
+      {
+        "name": "Meniscal Tear (Extrusion)",
+        "probability": 89.0
+      },
+      {
+        "name": "Effusion",
+        "probability": 86.0
+      }
+    ],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 2,
+        "confidence": 94.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 4,
+        "confidence": 61.0,
+        "positive_labels": [
+          {
+            "name": "Cartilage Lesion (3)",
+            "probability": 94.0
+          },
+          {
+            "name": "Meniscal Tear (Extrusion)",
+            "probability": 89.0
+          },
+          {
+            "name": "Effusion",
+            "probability": 86.0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x2-m4-disagree-mri-sure-elderly-comorbid",
+    "modality": "combined",
+    "grade": 3,
+    "confidence": 77.5,
+    "positive_labels": [
+      {
+        "name": "Cartilage Lesion (3)",
+        "probability": 94.0
+      },
+      {
+        "name": "Meniscal Tear (Extrusion)",
+        "probability": 89.0
+      },
+      {
+        "name": "Effusion",
+        "probability": 86.0
+      }
+    ],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 2,
+        "confidence": 61.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 4,
+        "confidence": 94.0,
+        "positive_labels": [
+          {
+            "name": "Cartilage Lesion (3)",
+            "probability": 94.0
+          },
+          {
+            "name": "Meniscal Tear (Extrusion)",
+            "probability": 89.0
+          },
+          {
+            "name": "Effusion",
+            "probability": 86.0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x3-m3-agree-xray-sure-older-prior-surgery",
+    "modality": "combined",
+    "grade": 3,
+    "confidence": 77.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Radial)",
+        "probability": 91.2
+      },
+      {
+        "name": "Effusion",
+        "probability": 84.7
+      },
+      {
+        "name": "Cartilage Lesion (2B)",
+        "probability": 66.1
+      }
+    ],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 3,
+        "confidence": 94.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 3,
+        "confidence": 61.0,
+        "positive_labels": [
+          {
+            "name": "Meniscal Tear (Radial)",
+            "probability": 91.2
+          },
+          {
+            "name": "Effusion",
+            "probability": 84.7
+          },
+          {
+            "name": "Cartilage Lesion (2B)",
+            "probability": 66.1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x3-m3-agree-mri-sure-elderly-comorbid",
+    "modality": "combined",
+    "grade": 3,
+    "confidence": 77.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Radial)",
+        "probability": 91.2
+      },
+      {
+        "name": "Effusion",
+        "probability": 84.7
+      },
+      {
+        "name": "Cartilage Lesion (2B)",
+        "probability": 66.1
+      }
+    ],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 3,
+        "confidence": 61.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 3,
+        "confidence": 94.0,
+        "positive_labels": [
+          {
+            "name": "Meniscal Tear (Radial)",
+            "probability": 91.2
+          },
+          {
+            "name": "Effusion",
+            "probability": 84.7
+          },
+          {
+            "name": "Cartilage Lesion (2B)",
+            "probability": 66.1
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x3-m1-disagree-xray-sure-young-athlete",
+    "modality": "combined",
+    "grade": 2,
+    "confidence": 77.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Myxoid)",
+        "probability": 58.0
+      }
+    ],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 3,
+        "confidence": 94.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 1,
+        "confidence": 61.0,
+        "positive_labels": [
+          {
+            "name": "Meniscal Tear (Myxoid)",
+            "probability": 58.0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x3-m1-disagree-mri-sure-midlife-raised-bmi",
+    "modality": "combined",
+    "grade": 2,
+    "confidence": 77.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Myxoid)",
+        "probability": 58.0
+      }
+    ],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 3,
+        "confidence": 61.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 1,
+        "confidence": 94.0,
+        "positive_labels": [
+          {
+            "name": "Meniscal Tear (Myxoid)",
+            "probability": 58.0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x4-m4-agree-xray-sure-young-athlete",
+    "modality": "combined",
+    "grade": 4,
+    "confidence": 77.5,
+    "positive_labels": [
+      {
+        "name": "Cartilage Lesion (3)",
+        "probability": 94.0
+      },
+      {
+        "name": "Meniscal Tear (Extrusion)",
+        "probability": 89.0
+      },
+      {
+        "name": "Effusion",
+        "probability": 86.0
+      }
+    ],
+    "patient_context": {
+      "age": 28,
+      "gender": "Male",
+      "bmi": 22.4,
+      "pain_level": 4,
+      "history": "Competitive football. Acute twisting injury 3 weeks ago.",
+      "symptoms": "Mechanical catching on pivot; no night pain."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 4,
+        "confidence": 94.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 4,
+        "confidence": 61.0,
+        "positive_labels": [
+          {
+            "name": "Cartilage Lesion (3)",
+            "probability": 94.0
+          },
+          {
+            "name": "Meniscal Tear (Extrusion)",
+            "probability": 89.0
+          },
+          {
+            "name": "Effusion",
+            "probability": 86.0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x4-m4-agree-mri-sure-midlife-raised-bmi",
+    "modality": "combined",
+    "grade": 4,
+    "confidence": 77.5,
+    "positive_labels": [
+      {
+        "name": "Cartilage Lesion (3)",
+        "probability": 94.0
+      },
+      {
+        "name": "Meniscal Tear (Extrusion)",
+        "probability": 89.0
+      },
+      {
+        "name": "Effusion",
+        "probability": 86.0
+      }
+    ],
+    "patient_context": {
+      "age": 52,
+      "gender": "Female",
+      "bmi": 31.2,
+      "pain_level": 7,
+      "history": "Insidious onset over 4 years. No prior surgery.",
+      "symptoms": "Pain on stairs and after prolonged standing."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 4,
+        "confidence": 61.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 4,
+        "confidence": 94.0,
+        "positive_labels": [
+          {
+            "name": "Cartilage Lesion (3)",
+            "probability": 94.0
+          },
+          {
+            "name": "Meniscal Tear (Extrusion)",
+            "probability": 89.0
+          },
+          {
+            "name": "Effusion",
+            "probability": 86.0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x4-m2-disagree-xray-sure-older-prior-surgery",
+    "modality": "combined",
+    "grade": 3,
+    "confidence": 77.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Horizontal)",
+        "probability": 77.0
+      },
+      {
+        "name": "Cartilage Lesion (2A)",
+        "probability": 69.0
+      }
+    ],
+    "patient_context": {
+      "age": 65,
+      "gender": "Male",
+      "bmi": 27.3,
+      "pain_level": 6,
+      "history": "Bilateral knee pain, 3 years. Prior meniscal repair, right knee.",
+      "symptoms": "Morning stiffness under 30 minutes; pain on stairs."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 4,
+        "confidence": 94.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 2,
+        "confidence": 61.0,
+        "positive_labels": [
+          {
+            "name": "Meniscal Tear (Horizontal)",
+            "probability": 77.0
+          },
+          {
+            "name": "Cartilage Lesion (2A)",
+            "probability": 69.0
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "case_id": "combined-x4-m2-disagree-mri-sure-elderly-comorbid",
+    "modality": "combined",
+    "grade": 3,
+    "confidence": 77.5,
+    "positive_labels": [
+      {
+        "name": "Meniscal Tear (Horizontal)",
+        "probability": 77.0
+      },
+      {
+        "name": "Cartilage Lesion (2A)",
+        "probability": 69.0
+      }
+    ],
+    "patient_context": {
+      "age": 78,
+      "gender": "Female",
+      "bmi": 24.1,
+      "pain_level": 8,
+      "history": "Type 2 diabetes, hypertension. Reduced mobility 18 months.",
+      "symptoms": "Constant rest pain; uses a frame indoors."
+    },
+    "studies": [
+      {
+        "modality": "xray",
+        "grade": 4,
+        "confidence": 61.0,
+        "positive_labels": []
+      },
+      {
+        "modality": "mri",
+        "grade": 2,
+        "confidence": 94.0,
+        "positive_labels": [
+          {
+            "name": "Meniscal Tear (Horizontal)",
+            "probability": 77.0
+          },
+          {
+            "name": "Cartilage Lesion (2A)",
+            "probability": 69.0
+          }
+        ]
+      }
+    ]
   }
 ]

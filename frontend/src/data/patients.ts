@@ -1,3 +1,5 @@
+import type { FusionResult, NoteModality } from "@/lib/diagnosticApi";
+
 export type Modality = "xray" | "mri";
 
 export interface ScanEntry {
@@ -77,6 +79,8 @@ export interface PatientReport {
    * problem on this type.
    */
   clinicalNotes?: SignedClinicalNote[];
+  /** The orchestrator's result when a batch combined an X-ray and an MRI. */
+  fusion?: FusionResult;
   updatedAt: string;
   version: number;
 }
@@ -93,7 +97,7 @@ export type NoteReviewStatus = "pending" | "accepted" | "edited" | "rejected";
  */
 export interface SignedClinicalNote {
   noteId: string;
-  modality: Modality;
+  modality: NoteModality;
   /** Verbatim model output. Never edited. */
   generatedText: string;
   /** Clinician's revision. Only set when `status` is "edited". */

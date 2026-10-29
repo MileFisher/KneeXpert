@@ -56,6 +56,13 @@ function renderPanel(props: Partial<Parameters<typeof ClinicalNotePanel>[0]> = {
 }
 
 describe("ClinicalNotePanel", () => {
+  it("headed by its title, so a combined note is distinguishable", () => {
+    renderPanel({ title: "Combined X-ray + MRI Note" });
+    expect(
+      screen.getByRole("heading", { name: "Combined X-ray + MRI Note" }),
+    ).toBeInTheDocument();
+  });
+
   it("shows a skeleton while generating", () => {
     renderPanel({ state: { kind: "loading" } });
     expect(screen.getByTestId("clinical-note-loading")).toBeInTheDocument();

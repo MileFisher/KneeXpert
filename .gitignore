@@ -46,6 +46,9 @@ backend/rag/index/
 # flag and a commit message saying which model and corpus produced them.
 backend/rag/eval/results/
 
+# === TruLens trace log (its own SQLite file; RAG_TRULENS=1) ===
+backend/rag/trulens/
+
 # === Model checkpoints (kept local, never committed) ===
 **/models/*
 !**/models/

@@ -123,6 +123,12 @@ export function approvedNoteText(note: SignedClinicalNote): string {
  * Names the model and the reviewer so responsibility for the text is
  * unambiguous in the record, and says so plainly when nobody has reviewed it.
  */
+/** Heading label for a note's modality in the exported record. */
+export function noteModalityLabel(modality: SignedClinicalNote["modality"]): string {
+  if (modality === "combined") return "Combined X-ray + MRI";
+  return modality === "xray" ? "X-ray" : "MRI";
+}
+
 export function noteAttributionLine(note: SignedClinicalNote): string {
   const model = note.generatedBy ?? "an AI model";
   if (!note.reviewedBy) {

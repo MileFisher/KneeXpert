@@ -270,7 +270,8 @@ export type BackboneHealth = {
 // Mirrors backend/rag/schemas.py. Additive: FeedbackBundle above is unchanged.
 
 /** Imaging modality, as the backend names it. */
-export type NoteModality = "xray" | "mri";
+/** A combined note reasons across one X-ray and one MRI of the same knee. */
+export type NoteModality = "xray" | "mri" | "combined";
 
 export type ClinicalNoteConfig = "ungrounded" | "rag_no_gate" | "rag_gate";
 
@@ -301,6 +302,11 @@ export type ClinicalNoteRequest = {
   positive_labels?: { name: string; probability: number }[];
   patient_context?: ClinicalNotePatientContext;
   config?: ClinicalNoteConfig;
+  /**
+   * Combined notes only: one X-ray and one MRI study. The backend recomputes
+   * `grade` and `confidence` from these, so the values sent above are ignored.
+   */
+  studies?: StudyResult[];
 };
 
 export type RetrievedPassage = {
@@ -485,6 +491,56 @@ export function gradcamToDataUrl(base64: string | null | undefined): string | nu
 export function pngBase64ToDataUrl(base64: string | null | undefined): string | null {
   if (!base64) return null;
   return `data:image/png;base64,${base64}`;
+}
+
+/** One modality's result, as sent to the backend orchestrator for fusion. */
+export type StudyResult = {
+  modality: "xray" | "mri";
+  grade: number;
+  confidence: number;
+  positive_labels?: { name: string; probability: number }[];
+};
+
+/**
+ * Mirrors `backend/orchestrator.py::FusionResult`.
+ *
+ * Two caveats travel with every fused grade and must be shown with it: the MRI
+ * grade is inferred from cartilage-lesion labels rather than read on the KL
+ * scale, and the weights are uncalibrated max-softmax confidences.
+ */
+export type FusionResult = {
+  /** Confidence-weighted mean, rounded half up. */
+  grade: number;
+  /** Before rounding, so a 2.5 reads as a coin toss rather than a firm 3. */
+  weighted_mean: number;
+  /** Plain mean of the inputs — never raised for agreement. */
+  confidence: number;
+  agreement: "concordant" | "discordant";
+  grade_gap: number;
+  /** Each modality's share of the weighted mean. */
+  weights: Partial<Record<"xray" | "mri", number>>;
+  studies: StudyResult[];
+  method: "confidence_weighted";
+};
+
+/** Combine per-modality grades on the backend, the one place fusion happens. */
+export async function fuseStudies(
+  studies: StudyResult[],
+  signal?: AbortSignal,
+): Promise<FusionResult> {
+  const res = await fetch(`${API_BASE}/api/fusion`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ studies }),
+    signal,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(typeof err.detail === "string" ? err.detail : "Fusion failed");
+  }
+
+  return res.json() as Promise<FusionResult>;
 }
 
 /**

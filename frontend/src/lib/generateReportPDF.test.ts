@@ -148,7 +148,18 @@ describe("generateReportPDF — clinical note inclusion", () => {
     );
     expect(output).toContain("XRAY_NOTE");
     expect(output).toContain("MRI_NOTE");
-    expect(output).toContain("Clinical Note (XRAY)");
+    expect(output).toContain("Clinical Note (X-ray)");
     expect(output).toContain("Clinical Note (MRI)");
+  });
+
+  it("labels a combined note as such, beside the per-scan notes", async () => {
+    const output = await renderPdf(
+      patientWith([
+        note({ noteId: "a", modality: "xray", generatedText: "XRAY_NOTE" }),
+        note({ noteId: "c", modality: "combined", generatedText: "COMBINED_NOTE" }),
+      ]),
+    );
+    expect(output).toContain("COMBINED_NOTE");
+    expect(output).toContain("Clinical Note (Combined X-ray + MRI)");
   });
 });

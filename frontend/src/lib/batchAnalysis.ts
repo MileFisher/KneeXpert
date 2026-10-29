@@ -1,6 +1,14 @@
 import type { Modality, ModalityReportSnapshot } from "@/data/patients";
 import type { CohortInputEntry } from "@/lib/cohortTypes";
-import { predictMri, predictMriSample, predictXray, type MriPredictResponse, type XrayPredictResponse } from "@/lib/diagnosticApi";
+import {
+  fuseStudies,
+  predictMri,
+  predictMriSample,
+  predictXray,
+  type FusionResult,
+  type MriPredictResponse,
+  type XrayPredictResponse,
+} from "@/lib/diagnosticApi";
 import { mriResponseToResult } from "@/lib/mriAnalysis";
 import { buildReportDiagnosisAssets } from "@/lib/reportSnapshot";
 import { getFeedbackFindings } from "@/lib/clinicalFeedback";
@@ -27,8 +35,9 @@ export type BatchPatientResult = {
   perModality: BatchModalityResult[];
   finalGrade: number;
   finalConfidence: number;
-  reliabilityBoost: number;
   agreement: "concordant" | "discordant";
+  /** The backend orchestrator's result. Null only when every modality failed. */
+  fusion: FusionResult | null;
   processedAt: string;
 };
 
@@ -39,23 +48,36 @@ export type BatchProgressUpdate = {
   status: "queued" | "processing" | "completed" | "error";
 };
 
-function fuseBatchResults(perModality: BatchModalityResult[]): Pick<
-  BatchPatientResult,
-  "finalGrade" | "finalConfidence" | "reliabilityBoost" | "agreement"
+/**
+ * Combine the successful modalities on the backend orchestrator.
+ *
+ * The rule lives only there: this module used to average the grades itself and
+ * add a fixed confidence bonus for agreement, which nothing justified.
+ */
+async function fuseOnBackend(
+  perModality: BatchModalityResult[],
+): Promise<
+  Pick<BatchPatientResult, "finalGrade" | "finalConfidence" | "agreement" | "fusion">
 > {
   const ok = perModality.filter(r => !r.error);
   if (!ok.length) {
-    return { finalGrade: 0, finalConfidence: 0, reliabilityBoost: 0, agreement: "discordant" };
+    return { finalGrade: 0, finalConfidence: 0, agreement: "discordant", fusion: null };
   }
-  const finalGrade = Math.round(ok.reduce((a, r) => a + r.grade, 0) / ok.length);
-  const agreement = ok.every(r => r.grade === ok[0].grade) ? "concordant" : "discordant";
-  const avgConf = ok.reduce((a, r) => a + r.confidence, 0) / ok.length;
-  const boost = ok.length > 1 && agreement === "concordant" ? 4.2 : ok.length > 1 ? 1.8 : 0;
+  const fusion = await fuseStudies(
+    ok.map(r => ({
+      modality: r.modality,
+      grade: r.grade,
+      confidence: r.confidence,
+      positive_labels: (r.mriData?.multilabel_predictions ?? [])
+        .filter(label => label.predicted)
+        .map(label => ({ name: label.name, probability: label.probability })),
+    })),
+  );
   return {
-    finalGrade,
-    finalConfidence: Math.min(99.5, Math.round((avgConf + boost) * 10) / 10),
-    reliabilityBoost: boost,
-    agreement,
+    finalGrade: fusion.grade,
+    finalConfidence: fusion.confidence,
+    agreement: fusion.agreement,
+    fusion,
   };
 }
 
@@ -149,7 +171,8 @@ export async function runPatientBatchAnalysis(
     }
   }
 
-  const fused = fuseBatchResults(perModality);
+  onStage?.("Fusing results on the orchestrator…");
+  const fused = await fuseOnBackend(perModality);
   return {
     patientId,
     perModality,
@@ -175,6 +198,13 @@ export function buildModalitySnapshots(result: BatchPatientResult): ModalityRepo
     }));
 }
 
+/**
+ * Shown wherever a fused grade is. The MRI grade is inferred from cartilage
+ * labels, not read on the KL scale, and the weights are uncalibrated.
+ */
+export const FUSION_CAVEAT =
+  "Weighted by uncalibrated model confidence; the MRI grade is inferred from cartilage-lesion labels, not read on the KL scale.";
+
 export function buildFusedFindings(result: BatchPatientResult): string[] {
   const ok = result.perModality.filter(r => !r.error);
   if (ok.length <= 1) return ok[0]?.findings ?? [];
@@ -190,11 +220,14 @@ export function buildFusedDiagnosisSummary(result: BatchPatientResult): string {
   const parts = ok.map(
     r => `${r.modality === "xray" ? "X-Ray" : "MRI"}: KL ${r.grade} (${r.confidence.toFixed(1)}%) via ${r.modelUsed}`,
   );
+  if (ok.length === 1) {
+    return `KL Grade ${result.finalGrade} (${result.finalConfidence.toFixed(1)}% confidence). ${parts[0]}.`;
+  }
   const agreement =
     result.agreement === "concordant"
       ? "Cross-modality concordant."
       : "Cross-modality discordant — review both inputs.";
-  return `Fused KL Grade ${result.finalGrade} (${result.finalConfidence.toFixed(1)}% confidence). ${parts.join(" · ")} ${agreement}`;
+  return `Confidence-weighted KL Grade ${result.finalGrade} (mean confidence ${result.finalConfidence.toFixed(1)}%). ${parts.join(" · ")} ${agreement} ${FUSION_CAVEAT}`;
 }
 
 export function batchResultToApplyPayload(

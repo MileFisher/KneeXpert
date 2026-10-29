@@ -487,6 +487,56 @@ export function pngBase64ToDataUrl(base64: string | null | undefined): string | 
   return `data:image/png;base64,${base64}`;
 }
 
+/** One modality's result, as sent to the backend orchestrator for fusion. */
+export type StudyResult = {
+  modality: "xray" | "mri";
+  grade: number;
+  confidence: number;
+  positive_labels?: { name: string; probability: number }[];
+};
+
+/**
+ * Mirrors `backend/orchestrator.py::FusionResult`.
+ *
+ * Two caveats travel with every fused grade and must be shown with it: the MRI
+ * grade is inferred from cartilage-lesion labels rather than read on the KL
+ * scale, and the weights are uncalibrated max-softmax confidences.
+ */
+export type FusionResult = {
+  /** Confidence-weighted mean, rounded half up. */
+  grade: number;
+  /** Before rounding, so a 2.5 reads as a coin toss rather than a firm 3. */
+  weighted_mean: number;
+  /** Plain mean of the inputs — never raised for agreement. */
+  confidence: number;
+  agreement: "concordant" | "discordant";
+  grade_gap: number;
+  /** Each modality's share of the weighted mean. */
+  weights: Partial<Record<"xray" | "mri", number>>;
+  studies: StudyResult[];
+  method: "confidence_weighted";
+};
+
+/** Combine per-modality grades on the backend, the one place fusion happens. */
+export async function fuseStudies(
+  studies: StudyResult[],
+  signal?: AbortSignal,
+): Promise<FusionResult> {
+  const res = await fetch(`${API_BASE}/api/fusion`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ studies }),
+    signal,
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: res.statusText }));
+    throw new Error(typeof err.detail === "string" ? err.detail : "Fusion failed");
+  }
+
+  return res.json() as Promise<FusionResult>;
+}
+
 /**
  * Generate a RAG-grounded clinical note for one diagnostic result.
  *

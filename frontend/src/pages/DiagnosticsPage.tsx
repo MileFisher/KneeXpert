@@ -39,6 +39,7 @@ import { ScanImageTile } from "@/components/diagnostics/ScanImageTile";
 import { buildReportDiagnosisAssets, buildDiagnosisSummary } from "@/lib/reportSnapshot";
 import {
   batchResultToApplyPayload,
+  FUSION_CAVEAT,
   runPatientBatchAnalysis,
   type BatchPatientResult,
 } from "@/lib/batchAnalysis";
@@ -609,8 +610,16 @@ interface JointAnalysis {
   perModality: ModalityResult[];
   finalGrade: number;
   finalConfidence: number;
-  reliabilityBoost: number;
   agreement: "concordant" | "discordant";
+  /**
+   * True when `finalGrade` came from the backend orchestrator combining two
+   * studies. The grade is never fused here: the rule lives in one place.
+   */
+  fused: boolean;
+}
+
+function agreementOf(rows: ModalityResult[]): "concordant" | "discordant" {
+  return rows.every(r => r.grade === rows[0]?.grade) ? "concordant" : "discordant";
 }
 
 function computeJointAnalysis(patient: Patient, batchResult?: BatchPatientResult): JointAnalysis {
@@ -624,8 +633,8 @@ function computeJointAnalysis(patient: Patient, batchResult?: BatchPatientResult
       })),
       finalGrade: batchResult.finalGrade,
       finalConfidence: batchResult.finalConfidence,
-      reliabilityBoost: batchResult.reliabilityBoost,
       agreement: batchResult.agreement,
+      fused: ok.length > 1,
     };
   }
 
@@ -636,16 +645,13 @@ function computeJointAnalysis(patient: Patient, batchResult?: BatchPatientResult
       grade: s.grade,
       confidence: Math.round(s.confidence * 10) / 10,
     }));
-    const finalGrade = patient.report.finalGrade;
-    const agreement = perModality.every(r => r.grade === perModality[0]?.grade) ? "concordant" : "discordant";
-    const avgConf = perModality.reduce((a, r) => a + r.confidence, 0) / perModality.length;
-    const boost = perModality.length > 1 && agreement === "concordant" ? 4.2 : perModality.length > 1 ? 1.8 : 0;
+    // Stored when the batch ran: the orchestrator's grade, or the doctor's override.
     return {
       perModality,
-      finalGrade,
+      finalGrade: patient.report.finalGrade,
       finalConfidence: patient.report.aiConfidence,
-      reliabilityBoost: boost,
-      agreement: perModality.length > 1 ? agreement : "concordant",
+      agreement: perModality.length > 1 ? agreementOf(perModality) : "concordant",
+      fused: perModality.length > 1,
     };
   }
 
@@ -677,19 +683,29 @@ function computeJointAnalysis(patient: Patient, batchResult?: BatchPatientResult
   }).filter(r => r.confidence > 0 || r.grade > 0);
 
   if (!perModality.length) {
-    return { perModality: [], finalGrade: 0, finalConfidence: 0, reliabilityBoost: 0, agreement: "discordant" };
+    return { perModality: [], finalGrade: 0, finalConfidence: 0, agreement: "discordant", fused: false };
   }
 
-  const finalGrade = Math.round(perModality.reduce((a, r) => a + r.grade, 0) / perModality.length);
-  const agreement = perModality.every(r => r.grade === perModality[0].grade) ? "concordant" : "discordant";
-  const avgConf = perModality.reduce((a, r) => a + r.confidence, 0) / perModality.length;
-  const boost = perModality.length > 1 && agreement === "concordant" ? 4.2 : perModality.length > 1 ? 1.8 : 0;
+  const agreement = agreementOf(perModality);
+  if (patient.report) {
+    return {
+      perModality,
+      finalGrade: patient.report.finalGrade,
+      finalConfidence: patient.report.aiConfidence,
+      agreement,
+      fused: false,
+    };
+  }
+
+  // No stored grade and no orchestrator result: show the more confident study
+  // rather than invent a fused grade locally.
+  const lead = [...perModality].sort((a, b) => b.confidence - a.confidence)[0];
   return {
     perModality,
-    finalGrade,
-    finalConfidence: Math.min(99.5, Math.round((avgConf + boost) * 10) / 10),
-    reliabilityBoost: boost,
+    finalGrade: lead.grade,
+    finalConfidence: lead.confidence,
     agreement,
+    fused: false,
   };
 }
 
@@ -742,11 +758,6 @@ function ClinicalInterpretation({
               {analysis.agreement === "concordant" ? "Cross-modality concordant" : "Cross-modality discordant"}
             </span>
           )}
-          {analysis.reliabilityBoost > 0 && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary font-medium">
-              +{analysis.reliabilityBoost}% reliability
-            </span>
-          )}
         </div>
         <div className="mb-3 p-2 rounded-lg bg-warning/5 border border-warning/20 flex items-start gap-2">
           <AlertTriangle className="w-3.5 h-3.5 text-warning flex-shrink-0 mt-0.5" />
@@ -757,9 +768,15 @@ function ClinicalInterpretation({
         <p className="text-sm leading-relaxed text-foreground/90 mb-3">
           The AI ensemble classified this {patient.age}-year-old {patient.gender.toLowerCase()} patient
           (BMI {patient.bmi}) as <span className="font-medium">Kellgren–Lawrence Grade {analysis.finalGrade} osteoarthritis</span> with
-          a fused confidence of {analysis.finalConfidence}%. {getFeedbackSummary(analysis.finalGrade, primaryFeedback)}
-          {analysis.perModality.length > 1 && " Multi-modality fusion of plain radiograph and MRI inputs strengthens the structural assessment by combining osseous evaluation from X-ray with soft-tissue (cartilage, meniscus, synovium) evaluation from MRI."}
+          {analysis.fused ? " a mean model confidence of " : " a model confidence of "}
+          {analysis.finalConfidence}%. {getFeedbackSummary(analysis.finalGrade, primaryFeedback)}
+          {analysis.fused && " The grade combines the X-ray and MRI results, each weighted by its model's confidence."}
         </p>
+        {analysis.fused && (
+          <p className="mb-3 text-[11px] text-muted-foreground leading-relaxed" data-testid="fusion-caveat">
+            {FUSION_CAVEAT}
+          </p>
+        )}
         <div className="space-y-3">
           {analysis.perModality.map(r => {
             const findings = findingsForMod(r.modality, r.grade);

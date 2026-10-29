@@ -19,6 +19,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+# Owned by the orchestrator, which combines studies before any note is written.
+# Re-exported here so existing imports of rag.schemas.LabelProbability still work.
+from orchestrator import LabelProbability  # noqa: F401
+
 NoteConfig = Literal["ungrounded", "rag_no_gate", "rag_gate"]
 """Which pipeline to run. Only the evaluation varies this; production uses rag_gate."""
 
@@ -47,14 +51,6 @@ class PatientContext(BaseModel):
     pain_level: int | None = Field(default=None, ge=0, le=10)
     history: str | None = None
     symptoms: str | None = None
-
-
-class LabelProbability(BaseModel):
-    """One predicted SKM-TEA category. ``probability`` is a percentage, matching
-    the scale the MRI pipeline already reports."""
-
-    name: str
-    probability: float = Field(ge=0, le=100)
 
 
 class FeedbackGenerateRequest(BaseModel):

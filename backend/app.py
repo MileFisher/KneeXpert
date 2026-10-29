@@ -17,6 +17,7 @@ from mri.pipeline import mri_models_available, predict_mri
 from xray import DEFAULT_ENSEMBLE_MODELS, MODELS_CONFIG, ModelLoader, all_available_model_ids
 from feedback_engine import generate_feedback
 from model_profiler import get_all_flops, get_model_flops_for_response
+from orchestrator import FusionRequest, FusionResult, fuse
 from rag.schemas import FeedbackGenerateRequest, FeedbackGenerateResponse
 from rag.service import CorpusNotIndexed, generate_clinical_note
 from rag.status import rag_health
@@ -97,6 +98,21 @@ def generate_feedback_note(payload: FeedbackGenerateRequest) -> JSONResponse:
         raise HTTPException(
             status_code=500, detail=f"Clinical note generation error: {e}"
         ) from e
+
+
+@app.post("/api/fusion", response_model=FusionResult)
+async def fuse_studies(payload: FusionRequest) -> JSONResponse:
+    """Combine per-modality grades into one, confidence-weighted.
+
+    The one place X-ray and MRI results are fused; see ``orchestrator`` for why
+    the MRI grade and the weights both carry caveats.
+    """
+    try:
+        return JSONResponse(content=fuse(payload.studies).model_dump())
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Fusion error: {e}") from e
 
 
 @app.get("/api/mri/categories")

@@ -42,8 +42,10 @@ At most 1-2 citations per sentence. NEVER write repeating sequential citations (
 timeframes that are not in FINDINGS or EVIDENCE.
 4. Confidence values are maximum-softmax outputs and are poorly calibrated. \
 Treat confidence below 70% as materially uncertain and say so.
-5. If the evidence does not support a recommendation, write "Insufficient \
-evidence in the supplied sources" rather than guessing.
+5. For next_steps: recommend only actions directly supported by FINDINGS or EVIDENCE \
+(e.g. MRI if soft-tissue pathology or clinical-radiographic discordance is suspected, or orthopedic surgical evaluation for severe joint changes). \
+Do NOT invent ungrounded exercise or medication regimens not stated in EVIDENCE. \
+If no specific action is indicated by the sources, write "Correlate with physical examination and monitor clinically."
 6. Do not restate the patient's identity. Do not address the patient.
 7. Output valid JSON only, matching the schema. No prose outside the JSON.
 
@@ -146,9 +148,9 @@ def render_findings_premise(req: FeedbackGenerateRequest) -> str:
         if facts:
             parts.append("The patient is " + " ".join(facts) + ".")
         if ctx.history:
-            parts.append(f"History: {ctx.history}")
+            parts.append(f"The patient has a clinical medical history of {ctx.history.rstrip('.')}.")
         if ctx.symptoms:
-            parts.append(f"Symptoms: {ctx.symptoms}")
+            parts.append(f"The patient reports clinical symptoms including {ctx.symptoms.rstrip('.')}.")
 
     return " ".join(parts)
 
@@ -259,6 +261,9 @@ def _clean_citations(text: str, max_passage: int = 10) -> str:
         return m.group(0) if 1 <= num <= max_passage else ""
 
     cleaned = CITATION_MARKER.sub(_filter_num, text)
+
+    # Normalize double punctuation around citations e.g. "change. [1] [2]." -> "change [1] [2]."
+    cleaned = re.sub(r"\.\s*(\[\d+(?:[,\s-]+\d+)*\](?:\s*\[\d+\])*)\.", r" \1.", cleaned)
 
     # Collapse excessive consecutive citations e.g. [1] [2] [3] [4] [5] -> at most 2
     def _collapse_run(m: re.Match[str]) -> str:

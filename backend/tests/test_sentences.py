@@ -84,6 +84,15 @@ def test_marker_after_the_full_stop_is_not_orphaned() -> None:
     assert all(part.strip() not in {"[1]", "[2]"} for part in parts), parts
 
 
+def test_multiple_markers_and_trailing_period_stay_with_sentence() -> None:
+    text = "Features are visible. [1] [2]. Next sentence."
+    parts = split_sentences(text)
+    assert len(parts) == 2
+    assert "[2]." not in parts
+    assert parts[0] == "Features are visible [1] [2]."
+    assert parts[1] == "Next sentence."
+
+
 # ── Other terminators and whitespace ──────────────────────────────────────────
 
 

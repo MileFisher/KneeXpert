@@ -1568,6 +1568,7 @@ function buildBatchConfirmPayload(
     modelResults: payload?.modelResults,
     modalitySnapshots: payload?.modalitySnapshots,
     fusion: payload?.fusion,
+    aiGrade: analysis.finalGrade,
     doctorOverride,
     overrideNotes,
   };
@@ -2533,6 +2534,7 @@ function DiagnosticWorkspace({
       : (assets?.diagnosisSummary ?? `KL Grade ${grade} · ${result.confidence}% confidence`);
     return {
       grade,
+      aiGrade: result.grade,
       aiConfidence: result.confidence,
       findings,
       diagnosisSummary,

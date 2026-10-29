@@ -13,7 +13,13 @@ import type { FusionResult } from "@/lib/diagnosticApi";
 import { loadPatients, savePatients } from "@/lib/patientStorage";
 
 export type ConfirmDiagnosisPayload = {
+  /** The final grade: the AI's when confirmed, the doctor's when overridden. */
   grade: number;
+  /**
+   * What the AI said, kept separately so an override does not erase it. Without
+   * it, AI-versus-doctor agreement cannot be measured from the record.
+   */
+  aiGrade: number;
   aiConfidence: number;
   findings: string[];
   diagnosisSummary: string;
@@ -34,7 +40,7 @@ export type ConfirmDiagnosisPayload = {
 
 export type ApplyAnalysisPayload = Omit<
   ConfirmDiagnosisPayload,
-  "doctorOverride" | "overrideNotes"
+  "doctorOverride" | "overrideNotes" | "aiGrade"
 > & {
   modalitySnapshots?: ModalityReportSnapshot[];
 };
@@ -203,10 +209,10 @@ export function PatientProvider({ children }: { children: ReactNode }) {
     setPatients(prev =>
       prev.map(p => {
         if (p.id !== patientId) return p;
-        const finalGrade = payload.doctorOverride ? payload.grade : payload.grade;
+        const finalGrade = payload.grade;
         const nextVersion = (p.report?.version ?? 0) + 1;
         const report: PatientReport = {
-          aiGrade: payload.grade,
+          aiGrade: payload.aiGrade,
           aiConfidence: payload.aiConfidence,
           finalGrade,
           modality: payload.modality,

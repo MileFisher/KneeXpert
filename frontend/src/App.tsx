@@ -18,6 +18,7 @@ import LoginPage from "./pages/LoginPage";
 import SignupPage from "./pages/SignupPage";
 import AdminLoginPage from "./pages/AdminLoginPage";
 import { AdminOverviewPage, AdminUsersPage, AdminAITrainingPage, AdminDatasetsPage, AdminModelsPage, AdminMRIPipelinePage, AdminSystemPage } from "./pages/AdminPage";
+import AdminAuditPage from "./pages/AdminAuditPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -45,6 +46,7 @@ const App = () => (
               <Route path="/admin/models" element={<AdminModelsPage />} />
               <Route path="/admin/mri-pipeline" element={<AdminMRIPipelinePage />} />
               <Route path="/admin/system" element={<AdminSystemPage />} />
+              <Route path="/admin/audit" element={<AdminAuditPage />} />
             </Route>
 
             {/* Doctor routes - persistent layout */}

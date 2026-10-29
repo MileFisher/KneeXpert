@@ -2,7 +2,7 @@ import { ReactNode, useState } from "react";
 import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Activity, LayoutDashboard, Users, Brain, Database, Cpu, Layers, Settings,
-  User, LogOut, Menu, PanelLeftClose, PanelLeft
+  ClipboardCheck, User, LogOut, Menu, PanelLeftClose, PanelLeft
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
@@ -17,6 +17,7 @@ const adminNavItems = [
   { icon: Cpu, label: "Models", path: "/admin/models" },
   { icon: Layers, label: "MRI Pipeline", path: "/admin/mri-pipeline" },
   { icon: Settings, label: "System", path: "/admin/system" },
+  { icon: ClipboardCheck, label: "Performance Audit", path: "/admin/audit" },
 ];
 
 function AdminSidebarContent({ collapsed, onNavigate, onToggle }: { collapsed: boolean; onNavigate?: () => void; onToggle?: () => void }) {

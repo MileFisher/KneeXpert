@@ -5,10 +5,16 @@ Run from this directory:
   uvicorn app:app --host 0.0.0.0 --port 9000 --reload
 """
 
+import os
+from pathlib import Path
+from dotenv import load_dotenv
+
+# Ensure backend/.env is loaded before configuring endpoints or services
+load_dotenv(Path(__file__).resolve().parent / ".env")
+
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pathlib import Path
 
 from mri.config import LABEL_SUMMARY_PATH, SAMPLE_MRI_PATH
 from xray.ensemble import predict_xray
@@ -24,10 +30,18 @@ from rag.status import rag_health
 
 app = FastAPI(title="KneeXpert Backbone API", version="1.0.0")
 
+cors_origins_env = os.getenv(
+    "CORS_ORIGINS",
+    "http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173",
+)
+allow_origins = [origin.strip() for origin in cors_origins_env.split(",") if origin.strip()]
+# Under CORS spec, allow_credentials cannot be True when allow_origins is ["*"]
+allow_credentials = "*" not in allow_origins
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=allow_origins,
+    allow_credentials=allow_credentials,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -300,4 +314,6 @@ async def predict_batch(
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=9000)
+    host = os.getenv("HOST", "0.0.0.0")
+    port = int(os.getenv("PORT", "9000"))
+    uvicorn.run(app, host=host, port=port)

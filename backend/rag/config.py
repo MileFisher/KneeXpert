@@ -104,10 +104,20 @@ NLI_PREMISE_TOP_N = 3  # per sentence, pre-filtered by embedding cosine
 # chosen operating point. The defensible values come from the Phase 4 sweep over
 # the (synthesis, next-steps) threshold plane, replayed offline against stored
 # per-sentence scores.
-SYNTHESIS_TAU = float(os.getenv("RAG_TAU", "0.60"))
+SYNTHESIS_TAU = float(
+    os.getenv("RAG_TAU")
+    or os.getenv("GROUNDEDNESS_TAU")
+    or os.getenv("GROUNDNESS_TAU")
+    or "0.60"
+)
 # Defaults to the synthesis threshold, so one shared bar is the starting point
 # and a lower one for recommendations has to be earned from the sweep.
-NEXT_STEPS_TAU = float(os.getenv("RAG_TAU_NEXT_STEPS", str(SYNTHESIS_TAU)))
+NEXT_STEPS_TAU = float(
+    os.getenv("RAG_TAU_NEXT_STEPS")
+    or str(SYNTHESIS_TAU)
+)
+# Backward-compatibility alias
+GROUNDEDNESS_TAU = SYNTHESIS_TAU
 MAX_RETRIES = 2  # 3 attempts total
 
 # ── TruLens (optional) ────────────────────────────────────────────────────────

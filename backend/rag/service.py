@@ -23,6 +23,7 @@ from typing import Any
 
 from rag.config import (
     GEN_SEED,
+    GROUNDEDNESS_TAU,
     MAX_RETRIES,
     NEXT_STEPS_TAU,
     OLLAMA_MODEL,
@@ -394,13 +395,13 @@ def _generate_clinical_note(
         if (
             gate_enabled
             and outcome.synthesis_groundedness is not None
-            and outcome.synthesis_groundedness >= GROUNDEDNESS_TAU
+            and outcome.synthesis_groundedness >= SYNTHESIS_TAU
         ):
             passing_step_texts = {
                 s.text
                 for s in outcome.sentence_scores
                 if s.sentence_class == "next_step"
-                and s.groundedness >= GROUNDEDNESS_TAU
+                and s.groundedness >= NEXT_STEPS_TAU
             }
             pruned_steps = [
                 step
@@ -411,16 +412,24 @@ def _generate_clinical_note(
                 s
                 for s in outcome.sentence_scores
                 if s.sentence_class == "synthesis"
-                or s.groundedness >= GROUNDEDNESS_TAU
+                or s.groundedness >= NEXT_STEPS_TAU
             ]
             from rag.gate import evaluate as gate_eval
 
-            pruned_outcome = gate_eval(kept_scores, threshold=GROUNDEDNESS_TAU)
+            pruned_outcome = gate_eval(
+                kept_scores,
+                threshold=SYNTHESIS_TAU,
+                next_steps_threshold=NEXT_STEPS_TAU,
+            )
             if pruned_outcome.passed:
                 pruned_note = ClinicalNote(
                     synthesis=result.note.synthesis,
                     next_steps=pruned_steps,
                 )
+                pruned_triad = _triad_for(
+                    req, pruned_note, passages, pruned_outcome, include_passages
+                )
+                tracer.scored(pruned_triad)
                 return respond(
                     clinical_note=_with_sentence_scores(
                         pruned_note, pruned_outcome.sentence_scores
@@ -429,9 +438,9 @@ def _generate_clinical_note(
                     gate_attempts=attempts,
                     parse_mode=result.parse_mode,
                     grounding_score=pruned_outcome.groundedness,
-                    triad=_triad_for(
-                        req, pruned_note, passages, pruned_outcome, include_passages
-                    ),
+                    synthesis_groundedness=pruned_outcome.synthesis_groundedness,
+                    next_steps_groundedness=pruned_outcome.next_steps_groundedness,
+                    triad=pruned_triad,
                 )
 
         # Name the failing sentences verbatim for the next attempt: a quoted

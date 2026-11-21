@@ -146,7 +146,7 @@ function cohortInputKey(patientId: string, modality: Modality): string {
 const xrayStages: { id: DiagnosticStage; label: string; duration: number }[] = [
   { id: "uploading", label: "Uploading DICOM file...", duration: 1200 },
   { id: "preprocessing", label: "Pre-processing: CLAHE + Denoise + Normalization", duration: 1800 },
-  { id: "inference", label: "Running all X-ray models (8 checkpoints + ensemble)", duration: 2500 },
+  { id: "inference", label: "Running all X-ray models (evaluation + ensemble)", duration: 2500 },
   { id: "gradcam", label: "Generating Grad-CAM heatmap...", duration: 1200 },
   { id: "complete", label: "Analysis complete", duration: 0 },
 ];
@@ -1544,7 +1544,7 @@ function buildBatchConfirmPayload(
   const primaryMod = payload?.modality ?? mods[0] ?? p.modality;
   const inputNames = mods.map(m => cohortInput?.[m]?.fileName).filter(Boolean).join(", ");
   const scan = p.scans.find(s => s.modality === primaryMod) ?? p.scans[0];
-  const modelUsed = payload?.modelUsed ?? (primaryMod === "xray" ? "Ensemble (8 models)" : "MACS-Net + DeiT-S");
+  const modelUsed = payload?.modelUsed ?? (primaryMod === "xray" ? "Ensemble" : "MACS-Net + DeiT-S");
   const findings = doctorOverride
     ? getFindingsForGrade(primaryMod, grade)
     : (payload?.findings ?? getFindingsForGrade(primaryMod, grade));
@@ -2189,7 +2189,7 @@ function DiagnosticWorkspace({
   };
   const selectOnlyMriStage = (id: string) => setSelectedMriStageIds(new Set([id]));
   const modelUsed = activeModality === "xray"
-    ? `Ensemble · ${xrayApiData?.model_count ?? 8} models`
+    ? (xrayApiData ? `Ensemble · ${xrayApiData.model_count} models` : "Ensemble")
     : mriApiData
       ? "MACS-Net + DeiT-S"
       : "MACS-Net + DeiT-S";

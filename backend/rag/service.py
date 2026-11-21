@@ -23,6 +23,7 @@ from typing import Any
 
 from rag.config import (
     GEN_SEED,
+    GROUNDEDNESS_TAU,
     MAX_RETRIES,
     NEXT_STEPS_TAU,
     OLLAMA_MODEL,
@@ -413,7 +414,9 @@ def _generate_clinical_note(
                 if s.sentence_class == "synthesis"
                 or s.groundedness >= NEXT_STEPS_TAU
             ]
-            pruned_outcome = evaluate(
+            from rag.gate import evaluate as gate_eval
+
+            pruned_outcome = gate_eval(
                 kept_scores,
                 threshold=SYNTHESIS_TAU,
                 next_steps_threshold=NEXT_STEPS_TAU,
@@ -423,6 +426,10 @@ def _generate_clinical_note(
                     synthesis=result.note.synthesis,
                     next_steps=pruned_steps,
                 )
+                pruned_triad = _triad_for(
+                    req, pruned_note, passages, pruned_outcome, include_passages
+                )
+                tracer.scored(pruned_triad)
                 return respond(
                     clinical_note=_with_sentence_scores(
                         pruned_note, pruned_outcome.sentence_scores
@@ -433,9 +440,7 @@ def _generate_clinical_note(
                     grounding_score=pruned_outcome.groundedness,
                     synthesis_groundedness=pruned_outcome.synthesis_groundedness,
                     next_steps_groundedness=pruned_outcome.next_steps_groundedness,
-                    triad=_triad_for(
-                        req, pruned_note, passages, pruned_outcome, include_passages
-                    ),
+                    triad=pruned_triad,
                 )
 
         # Name the failing sentences verbatim for the next attempt: a quoted

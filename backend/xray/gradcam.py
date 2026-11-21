@@ -28,6 +28,23 @@ class GradCAMGenerator:
             if hasattr(model, "backbone"):
                 return [model.backbone.features[-1]]
             return [model.features[-1]]
+        if "efficientnet" in name:
+            if hasattr(model, "conv_head"):
+                return [model.conv_head]
+            if hasattr(model, "blocks"):
+                return [model.blocks[-1]]
+            if hasattr(model, "features"):
+                return [model.features[-1]]
+        if "convnext" in name:
+            if hasattr(model, "stages"):
+                return [model.stages[-1]]
+        if "swin" in name:
+            if hasattr(model, "layers"):
+                return [model.layers[-1]]
+        for attr in ("conv_head", "layer4", "features", "blocks", "stages", "layers"):
+            if hasattr(model, attr):
+                target = getattr(model, attr)
+                return [target[-1] if hasattr(target, "__getitem__") else target]
         raise ValueError(f"Grad-CAM target layer unknown for family: {family}")
 
     def generate(self, model, family: str, input_tensor: torch.Tensor, original_image: Image.Image) -> str | None:
